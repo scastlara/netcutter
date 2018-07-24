@@ -65,6 +65,7 @@ def read_config(cfile):
 		opts[opt] = value
 	return opts
 
+
 def print_opts(opts):
 	'''
 	Prints options to stderr
@@ -80,6 +81,14 @@ def print_opts(opts):
 		sys.stderr.write("    - %s : %s\n" % (opt, opts[opt]) )
 	return
 
+
+def check_dependencies():
+	'''
+	Checks dependencies
+	'''
+	pass
+
+
 def check_opts(opts):
 	'''
 	Checks options and sets default parameters for missing opts
@@ -88,7 +97,7 @@ def check_opts(opts):
 		'neo4j_memory': '2g', 'neo4j_address': 'localhost:7474',
 		'web_address': 'localhost:8000'
 		}
-		
+
 	for opt, default in defaults.iteritems():
 		if opt not in opts:
 			opts[opt] = default
@@ -104,10 +113,14 @@ def check_opts(opts):
 		netengine_error(msg, fatal=True)
 	return
 
+
 def main():
 	print_start()
+	check_dependencies()
 	opts = read_config(sys.argv[1])
 	check_opts(opts)
 	print_opts(opts)
 
 
+if __name__ == "__main__":
+    main()
