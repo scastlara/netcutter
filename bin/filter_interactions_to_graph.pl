@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-#  filter_interactions_to_graph
+#  filter_interactions_to_graph2
 #
 #    Generates from level 0 (skel) to level MAXLVLS graphs
 #    from interating partners with our genes list.
@@ -9,7 +9,7 @@
 #
 # ####################################################################
 #
-#        Copyright (C) 2014/15 - Josep Francesc ABRIL FERRANDO
+#             Copyright (C) 2014/17 - Josep F ABRIL
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -27,11 +27,11 @@
 #
 # ####################################################################
 #
-# $Id: filter_interactions_to_graph.pl,v 1.1 2015/11/10 11:19:01 jabril Exp jabril $
+# $Id: filter_interactions_to_graph2.pl,v 1.1 2018/06/05 14:39:23 jabril Exp jabril $
 #
 # USAGE:
 #
-#   filter_interactions_to_graph.pl  [ options ]        \
+#   filter_interactions_to_graph2.pl  [ options ]        \
 #                                     genes_summary.tbl  \
 #                                     aliases_file.tbl   \
 #                                     destination_prefix \
@@ -44,7 +44,7 @@ use strict;
 use warnings;
 #
 BEGIN{
-    use CGL::Global qw( :Benchmark :ExecReport :CommandLine :GetFH :Exit );
+    use global qw( :Benchmark :ExecReport :CommandLine :GetFH :Exit );
     &init_timer(\@exectime);
 }
 # use Paths::Graph; ## Hangs on large graphs...
@@ -56,12 +56,12 @@ use Data::Dumper;
 
 #
 # VAR DEFS
-$PROG = 'filter_interactions_to_graph.pl';
+$PROG = 'filter_interactions_to_graph2.pl';
 $VERSION = '1.0';
 $USAGE =<<'+++EOH+++';
 USAGE:
 
-  filter_interactions_to_graph.pl  [ options ] \
+  filter_interactions_to_graph2.pl  [ options ] \
                               genes_summary.tbl \
                                aliases_file.tbl \
                              destination_prefix \
@@ -107,7 +107,7 @@ my @BGCOL = map { '#'.$_ } qw( 007CBA 249EC8 6FAFF9 2FF8F4 CBB0F0 C0EFBA 52E853 
                              # lvl-4  lvl-3  lvl-2  lvl-1   lvl0  lvl+1  lvl+2  lvl+3  lvl+4
                              # blues(-4:-1) / purple(0) / greens(+1:+4)
 my ($DVCOL,$NACOL,$DFCOL) = ('#F1A111','#CCCCCC','#000000'); # orange / lightgrey / black
-
+my @EDGECOL = map { '#'.$_ } qw( FF0000 0000FF 000000 ); # P/G/U on website orange/blue/darkgrey
 #
 # CMDLINE ARGS
 die("### ERROR ### This program requires at least 4 arguments!!!\n".
@@ -123,9 +123,9 @@ my ($rpgenesfile, $aliasfile, $outprefix, @interactionsfiles) = @ARGV;
 # MAIN LOOP
 &program_started($PROG);
 
-&read_hgnc_aliases_table($aliasfile, \%ALIAS, \%ALIASDSC);
+&read_hgnc_aliases_table($aliasfile, \%ALIAS, \%ALIASDSC, \%CPA);
 
-&read_rpgenes_table($rpgenesfile, \%DVgenes, \%GRAPH, \%HPARG, \%ALIAS, \%ALIASDSC);
+&read_rpgenes_table($rpgenesfile, \%DVgenes, \%GRAPH, \%HPARG, \%ALIAS, \%ALIASDSC, \%CPA);
 
 foreach my $intfilestr (@interactionsfiles) {
 
@@ -136,32 +136,33 @@ foreach my $intfilestr (@interactionsfiles) {
 
     SWITCH: {
 
-      ($dbid eq 'SPARSER') && do {
-	       &read_interactions_table_sparser(  $dbid, $interactionsfile, \%GRAPH, \%HPARG, \%ALIAS, \%ALIASDSC); # no aliases yet for this dataset
+      ($dbid eq 'SPARSER') && do { # no aliases yet for this dataset
+	       &read_interactions_table_sparser(  $dbid, $interactionsfile, \%GRAPH, \%HPARG, \%ALIAS, \%ALIASDSC, \%CPA);
 	       last SWITCH;
        };
 
       ($dbid eq 'BIOGRID') && do {
-	       &read_interactions_table_biogrid(  $dbid, $interactionsfile, \%GRAPH, \%HPARG, \%ALIAS, \%ALIASDSC);
+	       &read_interactions_table_biogrid(  $dbid, $interactionsfile, \%GRAPH, \%HPARG, \%ALIAS, \%ALIASDSC, \%CPA);
 	       last SWITCH;
        };
 
       ($dbid eq 'STRING') && do {
-	       &read_interactions_table_modstring($dbid, $interactionsfile, \%GRAPH, \%HPARG, \%ALIAS, \%ALIASDSC);
+	       &read_interactions_table_modstring($dbid, $interactionsfile, \%GRAPH, \%HPARG, \%ALIAS, \%ALIASDSC, \%CPA);
 	       last SWITCH;
       };
 
       ($dbid eq 'PPAXE') && do { # DEFAULT was PPaxe
-          &read_interactions_table_ppaxe(   $dbid, $interactionsfile, \%GRAPH, \%HPARG, \%ALIAS, \%ALIASDSC);
+          &read_interactions_table_ppaxe(   $dbid, $interactionsfile, \%GRAPH, \%HPARG, \%ALIAS, \%ALIASDSC, \%CPA);
           last SWITCH;
       };
 
       ($dbid eq 'IHOPCSV') && do { # DEFAULT was IHOPCSV
-          &read_interactions_table_iHOP(    $dbid, $interactionsfile, \%GRAPH, \%HPARG, \%ALIAS, \%ALIASDSC);
+          &read_interactions_table_iHOP(    $dbid, $interactionsfile, \%GRAPH, \%HPARG, \%ALIAS, \%ALIASDSC, \%CPA);
           last SWITCH;
       };
 
-      print STDERR "###############\n### WARNING ### DO NOT KNOW WHAT TO DO with $dbid FORMAT...\n###############\n" if $_verbose{'RAW'};
+      print STDERR "###############\n### WARNING ### DO NOT KNOW WHAT TO DO with $dbid FORMAT...\n###############\n"
+          if $_verbose{'RAW'};
 
     };
 };
@@ -172,21 +173,21 @@ foreach my $intfilestr (@interactionsfiles) {
 # after this we assume there is no redundancy at gene ids level
 
 &write_alias_file($outprefix, \%DVgenes, \%ALIAS, \%ALIASDSC);
-&dump_cpa($outprefix) if $_verbose{'DEBUG'};
+&dump_cpa($outprefix,\%CPA) if $_verbose{'DEBUG'};
 
-&save_full_graph($outprefix, \%GRAPH, \%DVgenes); # only DOT output implemented at this moment
+&save_full_graph($outprefix, \%GRAPH, \%DVgenes, \%ALIASDSC); # only DOT output implemented at this moment
 
-@SDI = @IDS = keys %DVgenes; # initialize the level zero IDs to DRIVER genes (which have been also checked for aliases)...
+@SDI = @IDS = keys %DVgenes;
+# initialize the level zero IDs to DRIVER genes (which have been also checked for aliases)...
 foreach my $id (@IDS) {
     $RIDS{$id} = 1;
 };
 
-&compute_shortests_paths($outprefix, \%GRAPH, \%DVgenes, \@IDS, \@SDI, \%ALIASDSC, \%DVgenes); # expand IDS set with those genes connecting DRIVERgenes
+# expand IDS set with those genes connecting DRIVERgenes
+&compute_shortests_paths($outprefix, \%GRAPH, \%DVgenes, \@IDS, \@SDI, \%ALIASDSC, \%DVgenes);
 
 for (my $i = 1; $i <= $MAXLVLS; $i++) {
-
     &build_graph($outprefix,  $i, \%GRAPH, \%HPARG, \%SUBGRAPH, \@IDS, \%RIDS, \%ALIASDSC, \%DVgenes);
-
 };
 
 &program_finished($PROG);
@@ -195,15 +196,19 @@ for (my $i = 1; $i <= $MAXLVLS; $i++) {
 #
 # FUNCTIONS
 
-sub norm_gene_id($) {
-    my ($id, $od);
+sub norm_gene_id($$) {
+    my ($id, $od, $cpa);
     $od = $id = shift;
+    $cpa = shift;
     # From man perlre and considering a complex encoding world (ASCCI/UTF8/locales/and so on)
     #
     # \w [3]  Match a "word" character (alphanumeric plus "_", plus
     #         other connector punctuation chars plus Unicode marks)
     # \W [3]  Match a non-"word" character
     #
+    # clean spaces just in case
+    $id =~ s/^\s*//og;
+    $id =~ s/\s*$//og;
     # FORCE "a" modifier to define \w/\W within ASCII to ensure \w == [A-Za-z0-9_]
     ($id = uc($id)) =~ s/\W+/_/oga;
     # Before: s/[\W_]//og
@@ -213,25 +218,31 @@ sub norm_gene_id($) {
     #    But question arises now,
     #    are GN1.1 and GN1-1 the same? Let's assume yes...
     # Just adding checkpoint...
-    $CPA{$id}{$od}++;
+    $cpa->{$id}{$od}++;
     return $id;
 } # norm_gene_id
 
-sub dump_cpa($) {
-    my $of = shift;
+sub dump_cpa($$) {
+    my $of  = shift;
+    my $cpa = shift;
     $of .= '.cpa_alias.dbg';
     open(CPAFH, "> $of") || die("### ERROR ### Cannot open alias debug file: $of\n");
-    foreach my $g (keys %CPA) {
-	print CPAFH join("\t", $g, join(" ", keys %{ $CPA{$g} })), "\n";
+    foreach my $g (keys %$cpa) {
+        print CPAFH join("\t",
+                         $g,
+                         join(" ",
+                              map { sprintf("%s[%d]", $_, $cpa->{$g}{$_}) }
+                              keys %{ $cpa->{$g} } )
+                         ), "\n";
     };
     close(CPAFH);
 } # dump_cpa
 
-sub add_aliases($$@) {
-    my ($hsh, $GID, @gids) = @_;
+sub add_aliases($$$@) {
+    my ($hsh, $GID, $cpa, @gids) = @_;
     # IMPORTANT: asume that $GID has been already processed with &norm_gene_id
     #            as it has been probably used to define network nodes before looking for aliases
-    $GID = &norm_gene_id($GID);
+    $GID = &norm_gene_id($GID, $cpa);
 
     # store an ID as an alias of itself
     exists($hsh->{$GID}) || ($hsh->{$GID} = { $GID => 0 });
@@ -241,9 +252,9 @@ sub add_aliases($$@) {
 
     # scalar(@gids) >= 1 -> add many aliases to the ID set of aliases
     foreach my $gid (@gids) {
-	$gid = &norm_gene_id($gid);
-	exists($hsh->{$GID}{$gid}) || ($hsh->{$GID}{$gid} = 0);
-	$hsh->{$GID}{$gid}++;
+        $gid = &norm_gene_id($gid, $cpa);
+        exists($hsh->{$GID}{$gid}) || ($hsh->{$GID}{$gid} = 0);
+        $hsh->{$GID}{$gid}++;
     };
 
     return;
@@ -259,54 +270,58 @@ sub check_aliases($$$) {
     # initializing projection of aliases "childs" vs reference names "parents"
     %$unalias = ();
     foreach my $lbl (keys %$alias) {
-	my @lst = keys %{ $alias->{$lbl} };
-	my $numal = scalar(@lst);
-	foreach my $syn (@lst) {
-	    exists($unalias->{$syn}) || ($unalias->{$syn} = []);
-	    push @{ $unalias->{$syn} }, [ $lbl,
-					  exists($desc->{$lbl}) ? 1 : 0 ,
-					  $numal ];
-	    # if multiple parents: keep the parent with hgnc ($desc) and/or that with more syns ($numal)
-	};
+        my @lst = keys %{ $alias->{$lbl} };
+        my $numal = scalar(@lst);
+        foreach my $syn (@lst) {
+            exists($unalias->{$syn}) || ($unalias->{$syn} = []);
+# UNCOMMENT THIS AFTER RUN
+#            # remove those alias ids that have a main id
+#            next if ($syn ne $lbl && exists($desc->{$syn}));
+#            #
+            push @{ $unalias->{$syn} }, [ $lbl,
+                                          exists($desc->{$lbl}) ? 1 : 0 ,
+                                          $numal ];
+            # if multiple parents: keep the parent with hgnc ($desc) and/or that with more syns ($numal)
+        };
     };
 
     print STDERR $bar, Data::Dumper->Dump([ $unalias ], [ qw( *UNALIAS-PRE ) ]),"\n", $bar if $DEBUG;
 
     # Attempt to fix redundant "parents"
     foreach my $syn (keys %$unalias) {
-
-	(ref($unalias->{$syn}) eq "ARRAY") || next;
-	# maybe it has changed on a previous alias rewrite (see next foreach loop)
-	# so that we no longer have an array but the corresponding "parent"
-
-	my @tmp = sort { $b->[1] <=> $a->[1] ||
+        
+        (ref($unalias->{$syn}) eq "ARRAY") || next;
+        # maybe it has changed on a previous alias rewrite (see next foreach loop)
+        # so that we no longer have an array but the corresponding "parent"
+        
+        my @tmp = sort { $b->[1] <=> $a->[1] ||
                          $b->[2] <=> $a->[2] }
- 	              @{ $unalias->{$syn} };
-	$unalias->{$syn} = $tmp[0][0];
-
-	# adding a check for "parents" that are no HGNCs, pointing to a synonim "child",
-	# to be referred by the same "parent" as the chosen for the "child"
-	scalar(@tmp) > 1 && do {
-	    my $rary = shift @tmp;
-	    foreach my $ary (@tmp) {
-		(!$ary->[1] && $rary->[1]) && do {
-		    $unalias->{$ary->[0]} = $unalias->{$syn};
-		};
-	    };
-	};
-
+                  @{ $unalias->{$syn} };
+        $unalias->{$syn} = $tmp[0][0];
+        
+        # adding a check for "parents" that are no HGNCs, pointing to a synonim "child",
+        # to be referred by the same "parent" as the chosen for the "child"
+        scalar(@tmp) > 1 && do {
+            my $rary = shift @tmp;
+            foreach my $ary (@tmp) {
+                (!$ary->[1] && $rary->[1]) && do {
+                    $unalias->{$ary->[0]} = $unalias->{$syn};
+                };
+            };
+        };
+        
     };
-
+    
     print STDERR $bar, Data::Dumper->Dump([ $unalias ], [ qw( *UNALIAS-POST ) ]),"\n", $bar if $DEBUG;
-
+    
     # Rewriting original aliases for reference names "parent"
     %$alias = ();
-    foreach my $syn (keys %$unalias) {
-	my $par = $unalias->{$syn};
-	exists($alias->{$par}) || ($alias->{$par} = {});
-	$alias->{$par}{$syn} = 1;
+    foreach my $syn (keys %{$unalias}) {
+        my $par = $unalias->{$syn};
+        exists($alias->{$par}) || ($alias->{$par} = {});
+        $alias->{$par}{$syn} = 1;
     };
-
+    
     print STDERR $bar, Data::Dumper->Dump([ $alias ], [ qw( *ALIAS-POST ) ]),"\n", $bar if $DEBUG;
 
 } # check_aliases
@@ -329,8 +344,8 @@ sub check_aliases($$$) {
 #     [AC] : Current symbol (first field) is an official HGNC symbol, not a synonym.
 #     [PR] : Not an alias but the previous official symbol name, probably deprecated.
 #     [SY] : Symbol from first field is a synonym of that ID.
-sub read_hgnc_aliases_table($$$) {
-    my ($file, $alias, $desc) = @_;
+sub read_hgnc_aliases_table($$$$) {
+    my ($file, $alias, $desc, $cpa) = @_;
     my $DEBUG = $_verbose{'DEBUG'};
 
     open(DVFILE, "< $file") || die("### ERROR ### Cannot open DRIVER genes file: $file\n");
@@ -339,88 +354,88 @@ sub read_hgnc_aliases_table($$$) {
     my ($c, $n, $r) = (1, 0, '.');
     while (<DVFILE>) {
 
-	my ($oid,$gid,$cnt,$dat,@dat,%hdat,$cd);
-	$r = ".";
+        my ($oid,$gid,$cnt,$dat,@dat,%hdat,$cd);
+        $r = ".";
 
-	next if /^\s*$/o;
-	next if /^\#/o;
+        next if /^\s*$/o;
+        next if /^\#/o;
 
-	chomp;
+        chomp;
 
-	($oid,$cnt,$dat,undef) = split /\t/o, $_;
+        ($oid,$cnt,$dat,undef) = split /\t/o, $_;
 
-	$gid = &norm_gene_id($oid);
+        $gid = &norm_gene_id($oid, $cpa);
 
-	print STDERR "### $oid -> $gid : $cnt $dat\n" if $DEBUG;
+        print STDERR "### $oid -> $gid : $cnt $dat\n" if $DEBUG;
 
       SWITCH: {
 
-	  $cnt =~ /^0([AU])/o && do {
-	      my ($d,$k,$ishugo);
-	      $ishugo = $1 eq "A" ? 1 : 0;
-	      $dat =~ s/;(\[(?:HG|OT|EN|SP|AC)\])/;\t$1/; # fix required as sometimes subfields are composite
-	      @dat = split /\t/o, $dat;
-	      %{ $desc->{$gid} } = ( 'ISHUGO' => $ishugo );
-	      foreach $d (@dat) {
-		  $d =~ s/^\[([^\]]+)\]//o;
-		  $k = defined($1) ? $1 : "UN";
-		  length($d) > 0 && do {
-		      $desc->{$gid}{$k} = $d;
-		  };
-	      };
-	      &add_aliases($alias,$gid);
-	      $r = "A";
-	      last SWITCH;
-	  };
+          $cnt =~ /^0([AU])/o && do {
+              my ($d,$k,$ishugo);
+              $ishugo = $1 eq "A" ? 1 : 0;
+              $dat =~ s/;(\[(?:HG|OT|EN|SP|AC)\])/;\t$1/; # fix required as sometimes subfields are composite
+              @dat = split /\t/o, $dat;
+              %{ $desc->{$gid} } = ( 'ISHUGO' => $ishugo );
+              foreach $d (@dat) {
+                  $d =~ s/^\[([^\]]+)\]//o;
+                  $k = defined($1) ? $1 : "UN";
+                  length($d) > 0 && do {
+                      $desc->{$gid}{$k} = $d;
+                  };
+              };
+              &add_aliases($alias,$gid,$cpa);
+              $r = "A";
+              last SWITCH;
+          };
 
-	  # $dat =~ s/;(\[(?:AC|PR|SY)\])/;\t$1/; # fix required as sometimes subfields are composite
-	  @dat = split /;/o, $dat;
-	  %hdat = ();
-	  foreach my $d (@dat) {
-	      $d eq '' && last;
-	      my ($j, $k); # = ('UN', '???');
-	      $d =~ /^\[([^\]]+)\](.*)$/o && do {
-           $j = defined($1) ? $1 : 'UN';
-           $k = defined($2) ? $2 : '???';
-	         exists($hdat{$j}) || ($hdat{$j} = []);
-	         push @{ $hdat{$j} }, $k;
-        };
-	  };
+          # $dat =~ s/;(\[(?:AC|PR|SY)\])/;\t$1/; # fix required as sometimes subfields are composite
+          @dat = split /;/o, $dat;
+          %hdat = ();
+          foreach my $d (@dat) {
+              $d eq '' && last;
+              my ($j, $k); # = ('UN', '???');
+              $d =~ /^\[([^\]]+)\](.*)$/o && do {
+                  $j = defined($1) ? $1 : 'UN';
+                  $k = defined($2) ? $2 : '???';
+                  exists($hdat{$j}) || ($hdat{$j} = []);
+                  push @{ $hdat{$j} }, $k;
+              };
+          };
 
-	  print STDERR Data::Dumper->Dump([ \%hdat ], [ qw( *hdat ) ]),"\n" if $DEBUG;
+          print STDERR Data::Dumper->Dump([ \%hdat ], [ qw( *hdat ) ]),"\n" if $DEBUG;
 
-	  if (exists($hdat{"AC"})) {
-	      # @{ $dat{"AC"} } = sort { $a cmp $b } @{ $dat{"AC"} }; # just to get always same key if more than one were defined...
-	      #                                                      # must think how to improve this
-	      # &add_aliases($alias, $dat{"AC"}[0],$gid);
-	      $cd = "AC";
-	      $r = "a";
-	  } elsif (exists($hdat{"PR"})) {
-	      # @{ $dat{"PR"} } = sort { $a cmp $b } @{ $dat{"PR"} }; # just to get always same key if more than one were defined...
-	      #                                                       # must think how to improve this
-	      # &add_aliases($alias, $dat{"PR"}[0],$gid);
-	      $cd = "PR";
-	      $r = "p";
-	  } elsif (exists($hdat{"SY"})) {
-	      # @{ $dat{"SY"} } = sort { $a cmp $b } @{ $dat{"SY"} }; # just to get always same key if more than one were defined...
-	      #                                                       # must think how to improve this
-	      # &add_aliases($alias, $dat{"SY"}[0],$gid);
-	      $cd = "SY";
-	      $r = "s";
-	  } else {
-	      $r = "?";
-	      last SWITCH;
-	  };
+          if (exists($hdat{"AC"})) {
+              # @{ $dat{"AC"} } = sort { $a cmp $b } @{ $dat{"AC"} }; # just to get always same key if more than one were defined...
+              #                                                      # must think how to improve this
+              # &add_aliases($alias, $dat{"AC"}[0], $cpa,$gid);
+              $cd = "AC";
+              $r = "a";
+          } elsif (exists($hdat{"PR"})) {
+              # @{ $dat{"PR"} } = sort { $a cmp $b } @{ $dat{"PR"} }; # just to get always same key if more than one were defined...
+              #                                                       # must think how to improve this
+              # &add_aliases($alias, $dat{"PR"}[0], $cpa,$gid);
+              $cd = "PR";
+              $r = "p";
+          } elsif (exists($hdat{"SY"})) {
+              # @{ $dat{"SY"} } = sort { $a cmp $b } @{ $dat{"SY"} }; # just to get always same key if more than one were defined...
+              #                                                       # must think how to improve this
+              # &add_aliases($alias, $dat{"SY"}[0], $cpa,$gid);
+              $cd = "SY";
+              $r = "s";
+          } else {
+              $r = "?";
+              last SWITCH;
+          };
 
-	  foreach my $u (@{ $hdat{$cd} }) {
-	      &add_aliases($alias, $u, $gid);
-	  };
+          foreach my $u (@{ $hdat{$cd} }) {
+              &add_aliases($alias, $u, $cpa, $gid);
+          };
 
-	}; # SWITCH
+        }; # SWITCH
 
-	print STDERR $r if $_verbose{'RAW'};
-	print STDERR "[$c]\n" if ($c % 50 == 0) && $_verbose{'RAW'};
-	$c++;
+        print STDERR $r if $_verbose{'RAW'};
+        print STDERR "[$c]\n" if ($c % 50 == 0) && $_verbose{'RAW'};
+        $c++;
 
     }; # while <DVFILE>
 
@@ -448,36 +463,44 @@ sub write_alias_file($$$$) {
 
     %tmp = ();
     foreach my $id (keys %$adesc) {
-	$tmp{$id} = "REF";
+        $tmp{$id} = "REF";
     };
     foreach my $id (keys %$alias) {
-	exists($tmp{$id}) || ($tmp{$id} = "SYN", next);
-	$tmp{$id} = "BTH"; # if an id apears on both, the longest synonyms list comes from %ALIAS not from %ADESC
+        exists($tmp{$id}) || ($tmp{$id} = "SYN", next);
+        $tmp{$id} = "BTH"; # if an id apears on both, the longest synonyms list comes from %ALIAS not from %ADESC
     };
 
     foreach my $id (keys %tmp) {
-	my ($rpflg, $synids, $dscstr);
+        my ($rpflg, $synids, $dscstr);
 
-	$rpflg = exists($rpids->{$id}) ? 1 : 0;
-	($synids, $dscstr) = ('', '');
+        $rpflg = exists($rpids->{$id}) ? 1 : 0;
+        ($synids, $dscstr) = ('', '');
 
-	if ($tmp{$id} eq "BTH") {
-	    $synids = join(",", keys %{ $alias->{$id} });
-	} elsif ($tmp{$id} eq "REF") {
-	    $synids = join(",", keys %{ $adesc->{$id} });
-	} else { # $tmp{$id} eq "SYN" already
-	    $synids = join(",", keys %{ $alias->{$id} });
-	};
+        # remove those alias ids that have a main id
+        my @a = grep { $_ !~ /\#\#\#NULL\#\#\#/ } 
+                map {
+                  my $i = $_;
+                  exists($adesc->{$i}) ? '###NULL###' : $i;
+                } keys %{ $alias->{$id} };
+        my @d = keys %{ $adesc->{$id} };
+        
+        if ($tmp{$id} eq "BTH") {
+            $synids = join(",", @a); # keys %{ $alias->{$id} });
+        } elsif ($tmp{$id} eq "REF") {
+            $synids = join(",", @d); # keys %{ $adesc->{$id} });
+        } else { # $tmp{$id} eq "SYN" already
+            $synids = join(",", @a); # keys %{ $alias->{$id} });
+        };
 
-	$adesc->{$id}{'ISHUGO'} = exists($adesc->{$id}{'ISHUGO'}) ? $adesc->{$id}{'ISHUGO'} : 0;
+        $adesc->{$id}{'ISHUGO'} = exists($adesc->{$id}{'ISHUGO'}) ? $adesc->{$id}{'ISHUGO'} : 0;
 
-	$dscstr = join("\t", map { exists($adesc->{$id})
-				   && exists($adesc->{$id}{$_})
-				       ? $adesc->{$id}{$_}
-				       : '-' } @IA);
-
-	print ALAS join("\t", $id, $rpflg, $synids, $dscstr),"\n";
-
+        $dscstr = join("\t", map { exists($adesc->{$id})
+                                && exists($adesc->{$id}{$_})
+                                   ? $adesc->{$id}{$_}
+                                   : '-' } @IA);
+        
+        print ALAS join("\t", $id, $rpflg, $synids, $dscstr),"\n";
+        
     };
 
     close(ALAS);
@@ -493,8 +516,8 @@ sub init_adjlist($$) {
 
     exists($href->{$gene}) || do {
 
-	$href->{$gene} = { 'ADJLST' => {} };
-	return 1;
+        $href->{$gene} = { 'ADJLST' => {} };
+        return 1;
 
     };
 
@@ -507,13 +530,12 @@ sub init_adjnode($$$) {
 
     exists($href->{$giA}{'ADJLST'}{$giB}) || do {
 
-	$href->{$giA}{'ADJLST'}{$giB} = { };
-	return 1;
+        $href->{$giA}{'ADJLST'}{$giB} = { };
+        return 1;
 
     };
 
     return 0;
-
 } # init_adjnode
 
 sub push_adjnode($$$$$) {
@@ -523,7 +545,7 @@ sub push_adjnode($$$$$) {
 
     $href->{$giA}{'ADJLST'}{$giB}{$lbl}[0]++;
     push @{ $href->{$giA}{'ADJLST'}{$giB}{$lbl} }, $str;
-
+    
 } # push_adjnode
 
 #### DRIVER genes table (custom made)  #### EXTed DRIVER genes table  #### IDSed DRIVER genes table
@@ -540,8 +562,8 @@ sub push_adjnode($$$$$) {
 # 11 5'MAX_GENE_5'
 # 12 3'MAX_GENE_3'
 # 13 UCSC_LINK
-sub read_rpgenes_table($$$$$$) {
-    my ($file, $rhsh, $hash, $cash, $alias, $adesc) = @_;
+sub read_rpgenes_table($$$$$$$) {
+    my ($file, $rhsh, $hash, $cash, $alias, $adesc, $cpa) = @_;
     my $DEBUG = $_verbose{'DEBUG'};
 
     my $xflg = ($file =~ s/^ext://o) ? 1 : 0;
@@ -553,87 +575,87 @@ sub read_rpgenes_table($$$$$$) {
     my ($c, $n) = (1, 0);
     while (<DVFILE>) {
 
-	my (@F, $f, $gid, @flags, $url, @I);
+        my (@F, $f, $gid, @flags, $url, @I);
 
-	next if /^\s*$/o;
-	next if /^\#/o;
+        next if /^\s*$/o;
+        next if /^\#/o;
 
-	chomp;
+        chomp;
 
-	$sflg && do { # if file contains just ids, few to do
+        $sflg && do { # if file contains just ids, few to do
 
-	    ($f, undef) = split /\s+/o, $_;
+            ($f, undef) = split /\s+/o, $_;
 
-	    $gid = &norm_gene_id($f);
+            $gid = &norm_gene_id($f, $cpa);
 
-	    &add_aliases($alias, $gid);
+            &add_aliases($alias, $gid, $cpa);
 
-	    exists($rhsh->{$gid}) && do {
-		warn("### WARNING ### $gid gene_id is duplicated...\n");
-		next;
-	    };
+            exists($rhsh->{$gid}) && do {
+                warn("### WARNING ### $gid gene_id is duplicated...\n");
+                next;
+            };
+            
+            $rhsh->{$gid} = { 'LVL' => 0, 'URL' => "NOURL" };
 
-	    $rhsh->{$gid} = { 'LVL' => 0, 'URL' => "NOURL" };
+            $n += &init_adjlist($hash, $gid);
+            &init_adjlist($cash, $gid);
 
-	    $n += &init_adjlist($hash, $gid);
-	    &init_adjlist($cash, $gid);
+            next;
 
-	    next;
+        };
 
-	};
+        @F = split /\t/o, $_;
 
-	@F = split /\t/o, $_;
+        print STDERR "### @F\n" if $DEBUG;
 
-	print STDERR "### @F\n" if $DEBUG;
+        $gid = defined($F[1])  ? $F[1]  : "UNKNOWN";
+        $xflg || ($url = defined($F[12]) ? $F[12] : "NOURL");
+        @flags = split //, $F[0];
 
-	$gid = defined($F[1])  ? $F[1]  : "UNKNOWN";
-	$xflg || ($url = defined($F[12]) ? $F[12] : "NOURL");
-	@flags = split //, $F[0];
+        $gid = &norm_gene_id($gid, $cpa);
 
-	$gid = &norm_gene_id($gid);
+        exists($rhsh->{$gid}) && do {
+            warn("### WARNING ### $gid gene_id is duplicated...\n");
+            next;
+        };
 
-	exists($rhsh->{$gid}) && do {
-	    warn("### WARNING ### $gid gene_id is duplicated...\n");
-	    next;
-	};
-
-	$rhsh->{$gid} = {
-	    'LVL' => 0,
-	    'URL' => $url,
+        $rhsh->{$gid} = {
+            'LVL' => 0,
+            'URL' => $url,
             'FLG' => [ @flags[0,1,2,3,4] ]
-	};
-            # flags for: Autosomal_dominant
-            #            Autosomal_recessive
-            #            X-Linked
-            #            Mitochondrial
-            #            Syndromic: 0/non-syndromic  1/can be both  2/always syndromic
+        };
+        # flags for: Autosomal_dominant
+        #            Autosomal_recessive
+        #            X-Linked
+        #            Mitochondrial
+        #            Syndromic: 0/non-syndromic  1/can be both  2/always syndromic
 
-	$n += &init_adjlist($hash, $gid);
-	&init_adjlist($cash, $gid);
+        $n += &init_adjlist($hash, $gid);
+        &init_adjlist($cash, $gid);
 
-	&add_aliases($alias, $gid);
-	# exists($alias->{$gid}) || ($alias->{$gid} = { $gid => 0 });
+        &add_aliases($alias, $gid, $cpa);
+        # exists($alias->{$gid}) || ($alias->{$gid} = { $gid => 0 });
 
-	($xflg && $F[2] ne '-') && do { # adding aliases for the extended table version
+        ($xflg && $F[2] ne '-') && do { # adding aliases for the extended table version
 
-	    @I = split /, */o, $F[2];
+            @I = split /, */o, $F[2];
 
-	    &add_aliases($alias, $gid, @I);
+            &add_aliases($alias, $gid, $cpa, @I);
 
-	    #     foreach my $i (@I) {
-	    #     	# my $g = &norm_gene_id($i);
-	    # 	&add_aliases($alias, $gid, &norm_gene_id($i));
-	    # 	# exists($alias->{$gid}) || ($alias->{$g} = { $gid => 0 });
-	    # 	# $alias->{$gid}{$g}++;
-	    #     };
+            #     foreach my $i (@I) {
+            #     	# my $g = &norm_gene_id($i, $cpa);
+            # 	&add_aliases($alias, $gid, $cpa, &norm_gene_id($i, $cpa));
+            # 	# exists($alias->{$gid}) || ($alias->{$g} = { $gid => 0 });
+            # 	# $alias->{$gid}{$g}++;
+            #     };
 
-	};
+        };
 
     } continue {
 
-	print STDERR "." if $_verbose{'RAW'};
-	print STDERR "[$c]\n" if ($c % 50 == 0) && $_verbose{'RAW'};
-	$c++;
+        print STDERR "." if $_verbose{'RAW'};
+        print STDERR "[$c]\n" if ($c % 50 == 0) && $_verbose{'RAW'};
+        $c++;
 
     }; # while <DVFILE>
 
@@ -671,8 +693,8 @@ sub read_rpgenes_table($$$$$$) {
 # 5 PubMed ID (PMID)
 # 6 Processed sentence
 #
-sub read_interactions_table_sparser($$$$$$) {
-    my ($dbid, $file, $hash, $cash, $alias, $adesc) = @_;
+sub read_interactions_table_sparser($$$$$$$) {
+    my ($dbid, $file, $hash, $cash, $alias, $adesc, $cpa) = @_;
     my $DEBUG = $_verbose{'DEBUG'};
 
     my ($prevnodesC, $prevnodesP, $prevnodesT, $prevedges) = (&count_nodes($hash), &count_edges($hash)); # scalar(keys %$hash);
@@ -683,42 +705,42 @@ sub read_interactions_table_sparser($$$$$$) {
     my ($c,$N,$n) = (1, 0, 0);
     while (<SPFILE>) {
 
-	my ($gid, $gidA, $gidB, $verb, $score, $class, $pmid, $lbl);
+        my ($gid, $gidA, $gidB, $sentence, $verb, $score, $class, $pmid, $lbl);
 
-	next if /^\s*$/o;
-	next if /^\#/o;
+        next if /^\s*$/o;
+        next if /^\#/o;
 
-	chomp;
-        ($gid, $verb, $score, $class, $pmid, undef) = split /\t/o, $_, 6;
+        chomp;
+        ($gid, $verb, $score, $class, $pmid, $sentence) = split /\t/o, $_, 6;
         ($gidA, $gidB) = split /\-\>/o, $gid, 2;
 
-	$gidA = &norm_gene_id($gidA);
-	$gidB = &norm_gene_id($gidB);
+        $gidA = &norm_gene_id($gidA, $cpa);
+        $gidB = &norm_gene_id($gidB, $cpa);
 
-	$N += &init_adjlist($hash, $gidA);
-	$N += &init_adjlist($hash, $gidB);
-	&init_adjlist($cash, $gidA);
-	&init_adjlist($cash, $gidB);
+        $N += &init_adjlist($hash, $gidA);
+        $N += &init_adjlist($hash, $gidB);
+        &init_adjlist($cash, $gidA);
+        &init_adjlist($cash, $gidB);
 
-	$lbl = $class.'|'.$verb;
+        $lbl = '<U>SPARSER|'.$verb; # '<U>' for unknown interaction type
 
-	$n += &init_adjnode($hash,$gidA,$gidB);
-	&init_adjnode($cash,$gidB,$gidA);
+        $n += &init_adjnode($hash,$gidA,$gidB);
+        &init_adjnode($cash,$gidB,$gidA);
 
-	&push_adjnode($hash,$gidA,$gidB,$lbl,"SPARSER $score $pmid");
-	&push_adjnode($cash,$gidB,$gidA,$lbl,"SPARSER $score $pmid");
+        &push_adjnode($hash,$gidA,$gidB,$lbl,"SPARSER $score $pmid <z>$sentence</z>");
+        &push_adjnode($cash,$gidB,$gidA,$lbl,"SPARSER $score $pmid <z>$sentence</z>");
 
-	# NO ALIASES defined ???
-	&add_aliases($alias, $gidA);
-	&add_aliases($alias, $gidB);
-	# exists($alias->{$gidA}) || ($alias->{$gidA} = { $gidA => 0 });
-	# exists($alias->{$gidB}) || ($alias->{$gidB} = { $gidB => 0 });
-	# $alias->{$gidA}{$gidA}++;
-	# $alias->{$gidB}{$gidB}++;
+        # NO ALIASES defined ???
+        &add_aliases($alias, $gidA, $cpa);
+        &add_aliases($alias, $gidB, $cpa);
+        # exists($alias->{$gidA}) || ($alias->{$gidA} = { $gidA => 0 });
+        # exists($alias->{$gidB}) || ($alias->{$gidB} = { $gidB => 0 });
+        # $alias->{$gidA}{$gidA}++;
+        # $alias->{$gidB}{$gidB}++;
 
-	print STDERR "." if $_verbose{'RAW'};
-	print STDERR "[$c]\n" if ($c % 100 == 0) && $_verbose{'RAW'};
-	$c++;
+        print STDERR "." if $_verbose{'RAW'};
+        print STDERR "[$c]\n" if ($c % 100 == 0) && $_verbose{'RAW'};
+        $c++;
 
     }; # while <DVFILE>
 
@@ -728,12 +750,12 @@ sub read_interactions_table_sparser($$$$$$) {
 
     my ($thynodesC, $thynodesP, $thynodesT, $thyedges) = (&count_nodes($hash), &count_edges($hash));
     print STDERR "### READ $c $dbid RELATIONSHIPS from $file\n",
-                 "##--> $dbid : $N new NODES and $n new EDGES, from $c INTERACTIONS read.\n",
+                 "##--> $dbid : $N new NODES and $n new EDGES, from $c records read.\n",
                  sprintf("##--> $dbid : NODES %d child %d parent / %d prev + %d new = %d total",
-			 $thynodesC, $thynodesP, $prevnodesT, $thynodesT - $prevnodesT, $thynodesT),
+                         $thynodesC, $thynodesP, $prevnodesT, $thynodesT - $prevnodesT, $thynodesT),
                  sprintf(           " : EDGES %d prev + %d new = %d total\n",
-			 $prevedges, $thyedges - $prevedges, $thyedges)
-		     if $_verbose{'RAW'};
+                                    $prevedges, $thyedges - $prevedges, $thyedges)
+                     if $_verbose{'RAW'};
 
     print STDERR Data::Dumper->Dump([ $hash ], [ qw( *GRAPH ) ]),"\n" if $DEBUG;
 
@@ -754,71 +776,71 @@ sub read_interactions_table_sparser($$$$$$) {
 #
 # VERB	The verb indicating the interaction
 #
-sub read_interactions_table_ppaxe($$$$$$) {
-  my ($dbid, $file, $hash, $cash, $alias, $adesc) = @_;
-  my $DEBUG = $_verbose{'DEBUG'};
+sub read_interactions_table_ppaxe($$$$$$$) {
+    my ($dbid, $file, $hash, $cash, $alias, $adesc, $cpa) = @_;
+    my $DEBUG = $_verbose{'DEBUG'};
 
-  my ($prevnodesC, $prevnodesP, $prevnodesT, $prevedges) = (&count_nodes($hash), &count_edges($hash)); # scalar(keys %$hash);
+    my ($prevnodesC, $prevnodesP, $prevnodesT, $prevedges) = (&count_nodes($hash), &count_edges($hash)); # scalar(keys %$hash);
 
-  open(DVFILE, "< $file") || die("### ERROR ### Cannot open $dbid network file: $file\n");
-  print STDERR "### READING $dbid NETWORK DATA from: $file\n" if $_verbose{'RAW'};
+    open(DVFILE, "< $file") || die("### ERROR ### Cannot open $dbid network file: $file\n");
+    print STDERR "### READING $dbid NETWORK DATA from: $file\n" if $_verbose{'RAW'};
 
-  my ($c,$N,$n) = (1, 0, 0);
-  while (<DVFILE>) {
+    my ($c,$N,$n) = (1, 0, 0);
+    while (<DVFILE>) {
 
-    my ($pmid, $gidA, $gidB, $score, $verb, $lbl);
-#    my ($pmid, $gidA, $gidB, $score, $verb, tverb, $lbl);
-    next if /^\s*$/o;
-    next if /^\#/o;
+        my ($pmid, $gidA, $gidB, $score, $sentence, $verb, $lbl);
+        #    my ($pmid, $gidA, $gidB, $score, $verb, tverb, $lbl);
+        next if /^\s*$/o;
+        next if /^\#/o;
 
-    chomp;
-    ($pmid, $gidA, $gidB, $score, undef) = split /\t/o, $_, 6;
-#   ($pmid, $gidA, $gidB, $score, $tverb, $lbl) = split /\t/o, $_, 6;
-    $gidA = &norm_gene_id($gidA);
-    $gidB = &norm_gene_id($gidB);
+        chomp;
+        ($pmid, $gidA, $gidB, $score, $sentence) = split /\t/o, $_, 5;
+        #   ($pmid, $gidA, $gidB, $score, $tverb, $lbl) = split /\t/o, $_, 6;
+        $gidA = &norm_gene_id($gidA, $cpa);
+        $gidB = &norm_gene_id($gidB, $cpa);
 
-    $N += &init_adjlist($hash, $gidA);
-    $N += &init_adjlist($hash, $gidB);
-    &init_adjlist($cash, $gidA);
-    &init_adjlist($cash, $gidB);
+        $N += &init_adjlist($hash, $gidA);
+        $N += &init_adjlist($hash, $gidB);
+        &init_adjlist($cash, $gidA);
+        &init_adjlist($cash, $gidB);
 
-    $lbl = "PPaxe";
-#    $lbl = "PPaxe".'|'.$verb;
+        $lbl = '<U>PPaxe';  # '<U>' for unknown interaction type
+        #    $lbl = "PPaxe".'|'.$verb;
 
-    $n += &init_adjnode($hash,$gidA,$gidB);
-    &init_adjnode($cash,$gidB,$gidA);
+        $n += &init_adjnode($hash,$gidA,$gidB);
+        &init_adjnode($cash,$gidB,$gidA);
 
-    &push_adjnode($hash,$gidA,$gidB,$lbl,"PPaxe $score $pmid");
-    &push_adjnode($cash,$gidB,$gidA,$lbl,"PPaxe $score $pmid");
+        &push_adjnode($hash,$gidA,$gidB,$lbl,"PPaxe $score $pmid <z>$sentence</z>");
+        &push_adjnode($cash,$gidB,$gidA,$lbl,"PPaxe $score $pmid <z>$sentence</z>");
 
-    # NO ALIASES defined ???
-    &add_aliases($alias, $gidA);
-    &add_aliases($alias, $gidB);
-    # exists($alias->{$gidA}) || ($alias->{$gidA} = { $gidA => 0 });
-    #  exists($alias->{$gidB}) || ($alias->{$gidB} = { $gidB => 0 });
-    # $alias->{$gidA}{$gidA}++;
-    # $alias->{$gidB}{$gidB}++;
+        # NO ALIASES defined ???
+        &add_aliases($alias, $gidA, $cpa);
+        &add_aliases($alias, $gidB, $cpa);
+        # exists($alias->{$gidA}) || ($alias->{$gidA} = { $gidA => 0 });
+        #  exists($alias->{$gidB}) || ($alias->{$gidB} = { $gidB => 0 });
+        # $alias->{$gidA}{$gidA}++;
+        # $alias->{$gidB}{$gidB}++;
 
-    print STDERR "." if $_verbose{'RAW'};
-    print STDERR "[$c]\n" if ($c % 100 == 0) && $_verbose{'RAW'};
-    $c++;
+        print STDERR "." if $_verbose{'RAW'};
+        print STDERR "[$c]\n" if ($c % 100 == 0) && $_verbose{'RAW'};
+        $c++;
 
-  }; # while <DVFILE>
+    }; # while <DVFILE>
 
-  print STDERR "[$c]\n" if ($c-- % 100 != 0) && $_verbose{'RAW'};
+    print STDERR "[$c]\n" if ($c-- % 100 != 0) && $_verbose{'RAW'};
 
-  close(DVFILE);
+    close(DVFILE);
 
-  my ($thynodesC, $thynodesP, $thynodesT, $thyedges) = (&count_nodes($hash), &count_edges($hash));
-  print STDERR "### READ $c $dbid RELATIONSHIPS from $file\n",
-              "##--> $dbid : $N parent and $n child new NODES, from $c INTERACTIONS read.\n",
-              sprintf("##--> $dbid : NODES %d child %d parent / %d prev + %d new = %d total",
-                      $thynodesC, $thynodesP, $prevnodesT, $thynodesT - $prevnodesT, $thynodesT),
-              sprintf(           " : EDGES %d prev + %d new = %d total\n",
-                      $prevedges, $thyedges - $prevedges, $thyedges)
-              if $_verbose{'RAW'};
+    my ($thynodesC, $thynodesP, $thynodesT, $thyedges) = (&count_nodes($hash), &count_edges($hash));
+    print STDERR "### READ $c $dbid RELATIONSHIPS from $file\n",
+                 "##--> $dbid : $N new NODES and $n new EDGES, from $c records read.\n",
+                 sprintf("##--> $dbid : NODES %d child %d parent / %d prev + %d new = %d total",
+                         $thynodesC, $thynodesP, $prevnodesT, $thynodesT - $prevnodesT, $thynodesT),
+                 sprintf(           " : EDGES %d prev + %d new = %d total\n",
+                                    $prevedges, $thyedges - $prevedges, $thyedges)
+                     if $_verbose{'RAW'};
 
-  print STDERR Data::Dumper->Dump([ $hash ], [ qw( *GRAPH ) ]),"\n" if $DEBUG;
+    print STDERR Data::Dumper->Dump([ $hash ], [ qw( *GRAPH ) ]),"\n" if $DEBUG;
 
 } # read_interactions_table_ppaxe
 
@@ -856,10 +878,44 @@ sub read_interactions_table_ppaxe($$$$$$) {
 #             but if A regulates B, B is not regulating A).
 #       Thus, we do not keep record of the reciprocal relations when loading interactions on %GRAPH.
 #
-sub read_interactions_table_biogrid($$$$$$) {
-    my ($dbid, $file, $hash, $cash, $alias, $adesc) = @_;
+sub read_interactions_table_biogrid($$$$$$$) {
+    my ($dbid, $file, $hash, $cash, $alias, $adesc, $cpa) = @_;
     my $DEBUG = $_verbose{'DEBUG'};
 
+    my %BGI = ( # https://wiki.thebiogrid.org/doku.php/experimental_systems
+                'AFFINITY CAPTURE-LUMINESCENCE' => 'P', # Physical Interactions
+                'AFFINITY CAPTURE-MS'           => 'P',
+                'AFFINITY CAPTURE-RNA'          => 'P',
+                'AFFINITY CAPTURE-WESTERN'      => 'P',
+                'BIOCHEMICAL ACTIVITY'          => 'P',
+                'CO-CRYSTAL STRUCTURE'          => 'P',
+                'CO-FRACTIONATION'              => 'P',
+                'CO-LOCALIZATION'               => 'P',
+                'CO-PURIFICATION'               => 'P',
+                'FAR WESTERN'                   => 'P',
+                'FRET'                          => 'P',
+                'PCA'                           => 'P',
+                'PROTEIN-PEPTIDE'               => 'P',
+                'PROTEIN-RNA'                   => 'P',
+                'PROXIMITY LABEL-MS'            => 'P',
+                'RECONSTITUTED COMPLEX'         => 'P',
+                'TWO-HYBRID'                    => 'P',
+                'DOSAGE GROWTH DEFECT'          => 'G', # Genetic Interactions
+                'DOSAGE LETHALITY'              => 'G',
+                'DOSAGE RESCUE'                 => 'G',
+                'NEGATIVE GENETIC'              => 'G',
+                'PHENOTYPIC ENHANCEMENT'        => 'G',
+                'PHENOTYPIC SUPPRESSION'        => 'G',
+                'POSITIVE GENETIC'              => 'G',
+                'SYNTHETIC GROWTH DEFECT'       => 'G',
+                'SYNTHETIC HAPLOINSUFFICIENCY'  => 'G',
+                'SYNTHETIC LETHALITY'           => 'G',
+                'SYNTHETIC RESCUE'              => 'G', # Keys up   from column: Experimental System
+                'UNKNOWN'                       => 'U',
+                'PHYSICAL'                      => 'P',	# Keys down from column: Experimental System Type
+                'GENETIC'                       => 'G'
+        );
+    
     my ($prevnodesC, $prevnodesP, $prevnodesT, $prevedges) = (&count_nodes($hash), &count_edges($hash)); # scalar(keys %$hash);
 
     open(DVFILE, "< $file") || die("### ERROR ### Cannot open $dbid network file: $file\n");
@@ -868,66 +924,68 @@ sub read_interactions_table_biogrid($$$$$$) {
     my ($c,$N,$n) = (1, 0, 0);
     while (<DVFILE>) {
 
-	my ($gidA, $gidB, $aliasA, $aliasB, $expersys, $expertype, $specA, $specB, $pmid, $score, $lbl);
+        my ($gidA, $gidB, $aliasA, $aliasB, $expersys, $expertype, $specA, $specB, $pmid, $score, $lbl, $tplbl);
 
-	next if /^\s*$/o;
-	next if /^\#/o;
+        next if /^\s*$/o;
+        next if /^\#/o;
 
-	chomp;
+        chomp;
 
-	(undef, undef, undef, undef, undef, undef, undef,
-	 $gidA, $gidB, $aliasA, $aliasB, $expersys, $expertype,
-	 undef, $pmid, $specA, $specB, undef, $score, undef) = split /\t/o, $_, 20;
+        (undef, undef, undef, undef, undef, undef, undef,
+         $gidA, $gidB, $aliasA, $aliasB, $expersys, $expertype,
+         undef, $pmid, $specA, $specB, undef, $score, undef) = split /\t/o, $_, 20;
 
-	# Check for human (sp_code=9606) and specA==specB (both prot/genes from the same species)
-	next if ($specA != $specB || $specA != 9606);
+        # Check for human (sp_code=9606) and specA==specB (both prot/genes from the same species)
+        next if ($specA != $specB || $specA != 9606);
 
-	print STDERR "### $gidA($aliasA) vs $gidB($aliasB) $expersys $expertype $specA==$specB\n" if $DEBUG;
+        print STDERR "### $gidA($aliasA) vs $gidB($aliasB) $expersys $expertype $specA==$specB\n" if $DEBUG;
 
-	$gidA = &norm_gene_id($gidA);
-	$gidB = &norm_gene_id($gidB);
+        $gidA = &norm_gene_id($gidA, $cpa);
+        $gidB = &norm_gene_id($gidB, $cpa);
 
-	$N += &init_adjlist($hash, $gidA);
-	$N += &init_adjlist($hash, $gidB);
-	&init_adjlist($cash, $gidA);
-	&init_adjlist($cash, $gidB);
+        $N += &init_adjlist($hash, $gidA);
+        $N += &init_adjlist($hash, $gidB);
+        &init_adjlist($cash, $gidA);
+        &init_adjlist($cash, $gidB);
 
-	$lbl = $expersys.'|'.$expertype;
+        my $ET = uc($expersys); # uc($expertype);
+        $tplbl = exists($BGI{$ET}) ? $BGI{$ET} : $BGI{'UNKNOWN'};
+        $lbl = '<'.$tplbl.'>'.$expersys.'|'.$expertype;
 
-	$n += &init_adjnode($hash,$gidA,$gidB);
-	&init_adjnode($cash,$gidB,$gidA);
+        $n += &init_adjnode($hash,$gidA,$gidB);
+        &init_adjnode($cash,$gidB,$gidA);
 
-	&push_adjnode($hash,$gidA,$gidB,$lbl,"BIOGRID $score $pmid");
-	&push_adjnode($cash,$gidB,$gidA,$lbl,"BIOGRID $score $pmid");
+        &push_adjnode($hash,$gidA,$gidB,$lbl,"BIOGRID $score $pmid");
+        &push_adjnode($cash,$gidB,$gidA,$lbl,"BIOGRID $score $pmid");
 
-	if ($aliasA ne '-') {
-	    my @A = split /\|/, $aliasA;
+        if ($aliasA ne '-') {
+            my @A = split /\|/, $aliasA;
 
-	    &add_aliases($alias, $gidA, @A);
-	    # foreach my $A (@A, $gidA) {
-	    # 	$A = &norm_gene_id($A);
-	    # 	exists($alias->{$gidA}) || ($alias->{$gidA} = { $gidA => 0 });
-	    # 	exists($alias->{$gidA}{$A}) || ($alias->{$gidA}{$A} = 0);
-	    # 	$alias->{$gidA}{$gidA}++;
-	    # 	$alias->{$gidA}{$A}++;
-	    # };
-	};
-	if ($aliasB ne '-') {
-	    my @B = split /\|/, $aliasB;
+            &add_aliases($alias, $gidA, $cpa, @A);
+            # foreach my $A (@A, $gidA) {
+            # 	$A = &norm_gene_id($A, $cpa);
+            # 	exists($alias->{$gidA}) || ($alias->{$gidA} = { $gidA => 0 });
+            # 	exists($alias->{$gidA}{$A}) || ($alias->{$gidA}{$A} = 0);
+            # 	$alias->{$gidA}{$gidA}++;
+            # 	$alias->{$gidA}{$A}++;
+            # };
+        };
+        if ($aliasB ne '-') {
+            my @B = split /\|/, $aliasB;
 
-	    &add_aliases($alias, $gidB, @B);
-	    # foreach my $B (@B, $gidB) {
-	    # 	$B = &norm_gene_id($B);
-	    # 	exists($alias->{$gidB}) || ($alias->{$gidB} = { $gidB => 0 });
-	    # 	exists($alias->{$gidB}{$B}) || ($alias->{$gidB}{$B} = 0);
-	    # 	$alias->{$gidB}{$gidB}++;
-	    # 	$alias->{$gidB}{$B}++;
-	    # };
-	};
+            &add_aliases($alias, $gidB, $cpa, @B);
+            # foreach my $B (@B, $gidB) {
+            # 	$B = &norm_gene_id($B, $cpa);
+            # 	exists($alias->{$gidB}) || ($alias->{$gidB} = { $gidB => 0 });
+            # 	exists($alias->{$gidB}{$B}) || ($alias->{$gidB}{$B} = 0);
+            # 	$alias->{$gidB}{$gidB}++;
+            # 	$alias->{$gidB}{$B}++;
+            # };
+        };
 
-	print STDERR "." if $_verbose{'RAW'};
-	print STDERR "[$c]\n" if ($c % 100 == 0) && $_verbose{'RAW'};
-	$c++;
+        print STDERR "." if $_verbose{'RAW'};
+        print STDERR "[$c]\n" if ($c % 100 == 0) && $_verbose{'RAW'};
+        $c++;
 
     }; # while <DVFILE>
 
@@ -937,12 +995,12 @@ sub read_interactions_table_biogrid($$$$$$) {
 
     my ($thynodesC, $thynodesP, $thynodesT, $thyedges) = (&count_nodes($hash), &count_edges($hash));
     print STDERR "### READ $c $dbid RELATIONSHIPS from $file\n",
-                 "##--> $dbid : $N parent and $n child new NODES, from $c INTERACTIONS read.\n",
+                 "##--> $dbid : $N new NODES and $n new EDGES, from $c records read.\n",
                  sprintf("##--> $dbid : NODES %d child %d parent / %d prev + %d new = %d total",
-			 $thynodesC, $thynodesP, $prevnodesT, $thynodesT - $prevnodesT, $thynodesT),
+                         $thynodesC, $thynodesP, $prevnodesT, $thynodesT - $prevnodesT, $thynodesT),
                  sprintf(           " : EDGES %d prev + %d new = %d total\n",
-			 $prevedges, $thyedges - $prevedges, $thyedges)
-		     if $_verbose{'RAW'};
+                                    $prevedges, $thyedges - $prevedges, $thyedges)
+                     if $_verbose{'RAW'};
 
     print STDERR Data::Dumper->Dump([ $hash ], [ qw( *GRAPH ) ]),"\n" if $DEBUG;
 
@@ -956,13 +1014,15 @@ sub read_interactions_table_biogrid($$$$$$) {
 #  2 Interactor B
 #  3 Interaction type
 #  4 Interaction Score
-#  5 Database/s: a  whitespace separated list of interaction/pathway/etc databases (if empty, interaction only described in STRING)
+#  5 IsBidirectional flag ### CHANGED INPUT FORMAT ###
+#  6 Evidences: a whitespace separated list of pubmed/interaction/pathway/etc database ids
 #
-# EXAMPLE:  FKBP4 <\t> FLJ31884 <\t> binding <\t> 992 <\t> grid kegg_pathways mint intact
+#  6.old Database/s: a  whitespace separated list of interaction/pathway/etc databases (if empty, interaction only described in STRING)
+# EXAMPLE:  FKBP4 <\t> FLJ31884 <\t> binding <\t> 992 <\t> t <\t> grid kegg_pathways mint intact
 ##
 ##TODO fix input file function
-sub read_interactions_table_modstring($$$$$$) {
-    my ($dbid, $file, $hash, $cash, $alias, $adesc) = @_;
+sub read_interactions_table_modstring($$$$$$$) {
+    my ($dbid, $file, $hash, $cash, $alias, $adesc, $cpa) = @_;
     my $DEBUG = $_verbose{'DEBUG'};
 
     my ($prevnodesC, $prevnodesP, $prevnodesT, $prevedges) = (&count_nodes($hash), &count_edges($hash)); # scalar(keys %$hash);
@@ -970,45 +1030,56 @@ sub read_interactions_table_modstring($$$$$$) {
     open(DVFILE, "< $file") || die("### ERROR ### Cannot open $dbid network file: $file\n");
     print STDERR "### READING $dbid NETWORK DATA from: $file\n" if $_verbose{'RAW'};
 
-    my ($c,$N,$n) = (1, 0, 0);
+    my ($c,$N,$n, $mo, $bi) = (1, 0, 0, 0, 0);
     while (<DVFILE>) {
 
-        my ($gidA, $gidB, $expertype, $score, $sources, $lbl);
+        my ($gidA, $gidB, $expertype, $score, $bidirflag, $sources, $lbl);
 
         next if /^\s*$/o;
         next if /^\#/o;
 
         chomp;
 
-        ($gidA, $gidB, $expertype, $score, $sources) = split /\t/o, $_;
+        ($gidA, $gidB, $expertype, $score, $bidirflag, $sources) = split /\t/o, $_;
 
-	$gidA = &norm_gene_id($gidA);
-	$gidB = &norm_gene_id($gidB);
+        $gidA = &norm_gene_id($gidA, $cpa);
+        $gidB = &norm_gene_id($gidB, $cpa);
 
-	$N += &init_adjlist($hash, $gidA);
-	$N += &init_adjlist($hash, $gidB);
-	&init_adjlist($cash, $gidA);
-	&init_adjlist($cash, $gidB);
+        $N += &init_adjlist($hash, $gidA);
+        $N += &init_adjlist($hash, $gidB);
+        &init_adjlist($cash, $gidA);
+        &init_adjlist($cash, $gidB);
 
-	$lbl = $expertype;
+        $lbl = '<P>'.$expertype; # assuming all <P>hysical?
 
-	$n += &init_adjnode($hash,$gidA,$gidB);
-	&init_adjnode($cash,$gidB,$gidA);
+        $n += &init_adjnode($hash,$gidA,$gidB);
+        &init_adjnode($cash,$gidB,$gidA);
 
-	&push_adjnode($hash,$gidA,$gidB,$lbl,"STRING $score $sources");
-	&push_adjnode($cash,$gidB,$gidA,$lbl,"STRING $score $sources");
+        &push_adjnode($hash,$gidA,$gidB,$lbl,"STRING $score $sources");
+        &push_adjnode($cash,$gidB,$gidA,$lbl,"STRING $score $sources");
 
-	# NO ALIASES defined ???
-	&add_aliases($alias, $gidA);
-	&add_aliases($alias, $gidB);
-	# exists($alias->{$gidA}) || ($alias->{$gidA} = { $gidA => 0 });
-	# exists($alias->{$gidB}) || ($alias->{$gidB} = { $gidB => 0 });
-	# $alias->{$gidA}{$gidA}++;
-	# $alias->{$gidB}{$gidB}++;
+        uc($bidirflag) eq 'T' && do { # adding reverse path if interaction is set as bidirectional in STRING
+
+            $n += &init_adjnode($hash,$gidB,$gidA);
+            &init_adjnode($cash,$gidA,$gidB);
+
+            &push_adjnode($hash,$gidB,$gidA,$lbl,"STRING $score $sources");
+            &push_adjnode($cash,$gidA,$gidB,$lbl,"STRING $score $sources");
+
+            $bi++;
+        };
+
+        # NO ALIASES defined ???
+        &add_aliases($alias, $gidA, $cpa);
+        &add_aliases($alias, $gidB, $cpa);
+        # exists($alias->{$gidA}) || ($alias->{$gidA} = { $gidA => 0 });
+        # exists($alias->{$gidB}) || ($alias->{$gidB} = { $gidB => 0 });
+        # $alias->{$gidA}{$gidA}++;
+        # $alias->{$gidB}{$gidB}++;
 
         print STDERR "." if $_verbose{'RAW'};
         print STDERR "[$c]\n" if ($c % 100 == 0) && $_verbose{'RAW'};
-	$c++;
+        $c++;
 
     }; # while <DVFILE>
 
@@ -1016,14 +1087,17 @@ sub read_interactions_table_modstring($$$$$$) {
 
     close(DVFILE);
 
+    $mo = $c - $bi;  
+
     my ($thynodesC, $thynodesP, $thynodesT, $thyedges) = (&count_nodes($hash), &count_edges($hash));
     print STDERR "### READ $c $dbid RELATIONSHIPS from $file\n",
-                 "##--> $dbid : $N parent and $n child new NODES, from $c INTERACTIONS read.\n",
+                 "##--> Total $c : $mo monodirectional + $bi bidirectional.\n",
+                 "##--> $dbid : $N new NODES and $n new EDGES, from $c records read.\n",
                  sprintf("##--> $dbid : NODES %d child %d parent / %d prev + %d new = %d total",
-			 $thynodesC, $thynodesP, $prevnodesT, $thynodesT - $prevnodesT, $thynodesT),
+                         $thynodesC, $thynodesP, $prevnodesT, $thynodesT - $prevnodesT, $thynodesT),
                  sprintf(           " : EDGES %d prev + %d new = %d total\n",
-			 $prevedges, $thyedges - $prevedges, $thyedges)
-		     if $_verbose{'RAW'};
+                                    $prevedges, $thyedges - $prevedges, $thyedges)
+                     if $_verbose{'RAW'};
 
     print STDERR Data::Dumper->Dump([ $hash ], [ qw( *GRAPH ) ]),"\n" if $DEBUG;
 
@@ -1046,8 +1120,8 @@ sub read_interactions_table_modstring($$$$$$) {
 # 11 OMIM_LINK
 # 12 PUBMED_ID
 #
-sub read_interactions_table_iHOP($$$$$$) {
-    my ($dbid, $file, $hash, $cash, $alias, $adesc) = @_;
+sub read_interactions_table_iHOP($$$$$$$) {
+    my ($dbid, $file, $hash, $cash, $alias, $adesc, $cpa) = @_;
     my $DEBUG = $_verbose{'DEBUG'};
 
     my ($prevnodesC, $prevnodesP, $prevnodesT, $prevedges) = (&count_nodes($hash), &count_edges($hash)); # scalar(keys %$hash);
@@ -1066,63 +1140,64 @@ sub read_interactions_table_iHOP($$$$$$) {
         chomp;
 
         ($expersys, $expertype, undef,
-	 $gidA, $gidB, $aliasA, $aliasB,
-	 undef, undef, undef, undef, $pmid) = split /\t/o, $_;
+         $gidA, $gidB, $aliasA, $aliasB,
+         undef, undef, undef, undef, $pmid) = split /\t/o, $_;
 
-	$pr = 0;
+        $pr = 0;
 
-	$gidA ne '-' && do {
-	    $gidA = &norm_gene_id($gidA);
-	    $N += &init_adjlist($hash, $gidA);
-	    &init_adjlist($cash, $gidA);
-	    $pr++;
-	};
+        $gidA ne '-' && do {
+            $gidA = &norm_gene_id($gidA, $cpa);
+            $N += &init_adjlist($hash, $gidA);
+            &init_adjlist($cash, $gidA);
+            $pr++;
+        };
 
-	$gidB ne '-' && do {
-	    $gidB = &norm_gene_id($gidB);
-	    $N += &init_adjlist($hash, $gidB);
-	    &init_adjlist($cash, $gidB);
-	    $pr++;
-	};
+        $gidB ne '-' && do {
+            $gidB = &norm_gene_id($gidB, $cpa);
+            $N += &init_adjlist($hash, $gidB);
+            &init_adjlist($cash, $gidB);
+            $pr++;
+        };
 
-	$pr == 2 && do {
-	    $lbl = $expersys.'|'.$expertype; # $SNPs."|".$diseases."|".$OMIM_VAR;
+        $pr == 2 && do {
+            $lbl = '<P>'.$expersys.'|'.$expertype; # assuming all <P>hysical?
+                   # $SNPs."|".$diseases."|".$OMIM_VAR;
 
-	    $n += &init_adjnode($hash,$gidA,$gidB);
-	    &init_adjnode($cash,$gidB,$gidA);
+            $n += &init_adjnode($hash,$gidA,$gidB);
+            &init_adjnode($cash,$gidB,$gidA);
 
-	    &push_adjnode($hash,$gidA,$gidB,$lbl,"IHOP hand-curated $pmid");
-	    &push_adjnode($cash,$gidB,$gidA,$lbl,"IHOP hand-curated $pmid");
-	};
+            &push_adjnode($hash,$gidA,$gidB,$lbl,"IHOP hand-curated $pmid");
+            &push_adjnode($cash,$gidB,$gidA,$lbl,"IHOP hand-curated $pmid");
+        };
 
-	if ($aliasA ne '-') {
-	    my @A = split /\|/, $aliasA;
+        if ($aliasA ne '-') {
+            my @A = split /\|/, $aliasA;
 
-	    &add_aliases($alias, $gidA, @A);
-	    # foreach my $A (@A, $gidA) {
-	    # 	$A = &norm_gene_id($A);
-	    # 	exists($alias->{$gidA}) || ($alias->{$gidA} = {});
-	    # 	exists($alias->{$gidA}{$A}) || ($alias->{$gidA}{$A} = 0);
-	    # 	$alias->{$gidA}{$gidA}++;
-	    # 	$alias->{$gidA}{$A}++;
-	    # };
-	};
-	if ($aliasB ne '-') {
-	    my @B = split /\|/, $aliasB;
+            &add_aliases($alias, $gidA, $cpa, @A);
+            # foreach my $A (@A, $gidA) {
+            # 	$A = &norm_gene_id($A, $cpa);
+            # 	exists($alias->{$gidA}) || ($alias->{$gidA} = {});
+            # 	exists($alias->{$gidA}{$A}) || ($alias->{$gidA}{$A} = 0);
+            # 	$alias->{$gidA}{$gidA}++;
+            # 	$alias->{$gidA}{$A}++;
+            # };
+        };
+        if ($aliasB ne '-') {
+            my @B = split /\|/, $aliasB;
 
-	    &add_aliases($alias, $gidB, @B);
-	    # foreach my $B (@B, $gidB) {
-	    # 	$B = &norm_gene_id($B);
-	    # 	exists($alias->{$gidB}) || ($alias->{$gidB} = {});
-	    # 	exists($alias->{$gidB}{$B}) || ($alias->{$gidB}{$B} = 0);
-	    # 	$alias->{$gidB}{$gidB}++;
-	    # 	$alias->{$gidB}{$B}++;
-	    # };
-	};
+            &add_aliases($alias, $gidB, $cpa, @B);
+            # foreach my $B (@B, $gidB) {
+            # 	$B = &norm_gene_id($B, $cpa);
+            # 	exists($alias->{$gidB}) || ($alias->{$gidB} = {});
+            # 	exists($alias->{$gidB}{$B}) || ($alias->{$gidB}{$B} = 0);
+            # 	$alias->{$gidB}{$gidB}++;
+            # 	$alias->{$gidB}{$B}++;
+            # };
+        };
 
         print STDERR "." if $_verbose{'RAW'};
         print STDERR "[$c]\n" if ($c % 100 == 0) && $_verbose{'RAW'};
-	$c++;
+        $c++;
 
     }; # while <DVFILE>
 
@@ -1132,12 +1207,12 @@ sub read_interactions_table_iHOP($$$$$$) {
 
     my ($thynodesC, $thynodesP, $thynodesT, $thyedges) = (&count_nodes($hash), &count_edges($hash));
     print STDERR "### READ $c $dbid RELATIONSHIPS from $file\n",
-                 "##--> $dbid : $N parent and $n child new NODES, from $c INTERACTIONS read.\n",
+                 "##--> $dbid : $N new NODES and $n new EDGES, from $c records read.\n",
                  sprintf("##--> $dbid : NODES %d child %d parent / %d prev + %d new = %d total",
-			 $thynodesC, $thynodesP, $prevnodesT, $thynodesT - $prevnodesT, $thynodesT),
+                         $thynodesC, $thynodesP, $prevnodesT, $thynodesT - $prevnodesT, $thynodesT),
                  sprintf(           " : EDGES %d prev + %d new = %d total\n",
-			 $prevedges, $thyedges - $prevedges, $thyedges)
-		     if $_verbose{'RAW'};
+                                    $prevedges, $thyedges - $prevedges, $thyedges)
+                     if $_verbose{'RAW'};
 
     print STDERR Data::Dumper->Dump([ $hash ], [ qw( *GRAPH ) ]),"\n" if $DEBUG;
 
@@ -1155,9 +1230,9 @@ sub build_graph($$$$$$$$$) {
     $STATUS{'SUBGRAPH'} = { map { $_ => 0 } keys %$subgraph };
 
     my ($fullnodesC, $fullnodesP, $fullnodesT, $fulledges,
-	$prevnodesC, $prevnodesP, $prevnodesT, $prevedges
-	) = (&count_nodes($graph),    &count_edges($graph),
-	     &count_nodes($subgraph), &count_edges($subgraph)); # scalar(keys %$hash);
+        $prevnodesC, $prevnodesP, $prevnodesT, $prevedges
+        ) = (&count_nodes($graph),    &count_edges($graph),
+             &count_nodes($subgraph), &count_edges($subgraph)); # scalar(keys %$hash);
 
     ## SUBGRAPH
 
@@ -1170,80 +1245,83 @@ sub build_graph($$$$$$$$$) {
     my $x = '-'; # - is missing / + is found
     foreach my $id (@thyids) {
 
-	# $id = &norm_gene_id($id); # NOT needed, this is performed each time a new gene is processed from input files
+        # $id = &norm_gene_id($id, $cpa); # NOT needed, this is performed each time a new gene is processed from input files
 
-	my @Cn = ();
-	my @Pn = ();
+        my @Cn = ();
+        my @Pn = ();
 
-	if (exists($graph->{$id}) || exists($hparg->{$id})) {
+        if (exists($graph->{$id}) || exists($hparg->{$id})) {
 
-	    $x = '+';
-	    $STATUS{'FOUND'}{$id}++;
+            $x = '+';
+            $STATUS{'FOUND'}{$id}++;
 
-	    @Cn = keys %{ $graph->{$id}{'ADJLST'} } if exists($graph->{$id});
-	    @Pn = keys %{ $hparg->{$id}{'ADJLST'} } if exists($hparg->{$id});
+            @Cn = keys %{ $graph->{$id}{'ADJLST'} } if exists($graph->{$id});
+            @Pn = keys %{ $hparg->{$id}{'ADJLST'} } if exists($hparg->{$id});
 
-	# NOTE: ALIASES have been previously removed using &compacting_graph()
-	# } elsif (exists($alias->{$id})) {
-	#     my $fnd = 0;
-	#     foreach my $alid (keys %{ $alias->{$id} }) {
-	# 	# look for aliases, else missing... implement aliases later or build GRAPH based on main ID...
-	#     };
-	#     $x = ':';
-	#     $STATUS{'ALIAS'}{$id}++;
-	} else {
-	    $x = '-';
-	    $STATUS{'MISSING'}{$id}++;
-	    next;
-	};
+            # NOTE: ALIASES have been previously removed using &compacting_graph()
+            # } elsif (exists($alias->{$id})) {
+            #     my $fnd = 0;
+            #     foreach my $alid (keys %{ $alias->{$id} }) {
+            # 	# look for aliases, else missing... implement aliases later or build GRAPH based on main ID...
+            #     };
+            #     $x = ':';
+            #     $STATUS{'ALIAS'}{$id}++;
+        } else {
+            $x = '-';
+            $STATUS{'MISSING'}{$id}++;
+            next;
+        };
 
-	exists($subgraph->{$id}) || do {
-	    $subgraph->{$id}{'ADJLST'} = {};
-	    $subgraph->{$id}{'LVL'} = undef; # exists($rids->{$id}) ? 0 : $level;
-                                    # we do not know a priory if this $id will have parent or child nodes
-	    exists($GNG{$id}) || ($GNG{$id} = { "C" => {}, "P" => {} });
-	};
+        exists($subgraph->{$id}) || do {
+            $subgraph->{$id}{'ADJLST'} = {};
+            $subgraph->{$id}{'ALIASES'} = $graph->{$id}{'ALIASES'};
+            $subgraph->{$id}{'LVL'} = undef; # exists($rids->{$id}) ? 0 : $level;
+            # we do not know a priory if this $id will have parent or child nodes
+            exists($GNG{$id}) || ($GNG{$id} = { "C" => {}, "P" => {} });
+        };
 
-	my ($numC,$numP) = ( scalar(@Cn), scalar(@Pn) );
-	($numC + $numP != 0 && !defined($subgraph->{$id}{'LVL'}))
-	    && ($subgraph->{$id}{'LVL'} = (exists($rids->{$id}) ? 0 : $level));
+        my ($numC,$numP) = ( scalar(@Cn), scalar(@Pn) );
+        ($numC + $numP != 0 && !defined($subgraph->{$id}{'LVL'}))
+            && ($subgraph->{$id}{'LVL'} = (exists($rids->{$id}) ? 0 : $level));
 
-	# look for the child nodes
-	foreach my $cn (@Cn) {
+        # look for the child nodes
+        foreach my $cn (@Cn) {
 
-	    exists($subgraph->{$cn}) || do {
-		$subgraph->{$cn}{'ADJLST'} = {};
-		$subgraph->{$cn}{'LVL'} = exists($rids->{$cn}) ? 0 : $level;
-	    };
+            exists($subgraph->{$cn}) || do {
+                $subgraph->{$cn}{'ADJLST'} = {};
+                $subgraph->{$cn}{'ALIASES'} = $graph->{$cn}{'ALIASES'};
+                $subgraph->{$cn}{'LVL'} = exists($rids->{$cn}) ? 0 : $level;
+            };
 
-	    exists($subgraph->{$id}{'ADJLST'}{$cn}) || do {
-		$subgraph->{$id}{'ADJLST'}{$cn} = $graph->{$id}{'ADJLST'}{$cn};
-		# already def: $subgraph->{$id}{'LVL'} = exists($rids->{$id}) ? 0 : $level;
-		exists($GNG{$cn}) || ($GNG{$cn} = { "C" => {}, "P" => {} });
-		$GNG{$id}{"C"}{$cn}++;
-		$GNG{$cn}{"P"}{$id}++;
-	    };
+            exists($subgraph->{$id}{'ADJLST'}{$cn}) || do {
+                $subgraph->{$id}{'ADJLST'}{$cn} = $graph->{$id}{'ADJLST'}{$cn};
+                # already def: $subgraph->{$id}{'LVL'} = exists($rids->{$id}) ? 0 : $level;
+                exists($GNG{$cn}) || ($GNG{$cn} = { "C" => {}, "P" => {} });
+                $GNG{$id}{"C"}{$cn}++;
+                $GNG{$cn}{"P"}{$id}++;
+            };
 
-	};
+        };
 
-	# look for the parent nodes
-	foreach my $pn (@Pn) {
+        # look for the parent nodes
+        foreach my $pn (@Pn) {
 
-	    exists($subgraph->{$pn}) || do {
-		$subgraph->{$pn}{'ADJLST'} = {};
-		$subgraph->{$pn}{'LVL'} = exists($rids->{$pn}) ? 0 : -$level;
-	    };
+            exists($subgraph->{$pn}) || do {
+                $subgraph->{$pn}{'ADJLST'} = {};
+                $subgraph->{$pn}{'ALIASES'} = $graph->{$pn}{'ALIASES'};
+                $subgraph->{$pn}{'LVL'} = exists($rids->{$pn}) ? 0 : -$level;
+            };
 
-	    exists($subgraph->{$pn}{'ADJLST'}{$id}) || do {
-		$subgraph->{$pn}{'ADJLST'}{$id} = $graph->{$pn}{'ADJLST'}{$id};
-		exists($GNG{$pn}) || ($GNG{$pn} = { "C" => {}, "P" => {} });
-		$GNG{$pn}{"C"}{$id}++;
-		$GNG{$id}{"P"}{$pn}++;
-	    };
+            exists($subgraph->{$pn}{'ADJLST'}{$id}) || do {
+                $subgraph->{$pn}{'ADJLST'}{$id} = $graph->{$pn}{'ADJLST'}{$id};
+                exists($GNG{$pn}) || ($GNG{$pn} = { "C" => {}, "P" => {} });
+                $GNG{$pn}{"C"}{$id}++;
+                $GNG{$id}{"P"}{$pn}++;
+            };
 
-	};
+        };
 
-	print STDERR $x if $_verbose{'RAW'};
+        print STDERR $x if $_verbose{'RAW'};
         print STDERR "[$c]\n" if (++$c % 50 == 0) && $_verbose{'RAW'};
 
     }; # foreach $id
@@ -1255,25 +1333,27 @@ sub build_graph($$$$$$$$$) {
 
     my ($thynodesC, $thynodesP, $thynodesT, $thyedges) = (&count_nodes($subgraph), &count_edges($subgraph));
     printf STDERR "### LEVEL %s: From %d IDS, %d were found, %d were missing, %d predefined\n".
-                  "### LEVEL %s: NODES %d prev + %d new = %d total from %d / %d child + %d parent from %d child + %d parent".
-                             " : EDGES %d prev + %d new = %d total from %d.\n",
-                  $numlvl, scalar(@thyids),
-	          $STATUS{'FOUND'}, $STATUS{'MISSING'}, $STATUS{'SUBGRAPH'},
-	          $numlvl, $prevnodesT, $thynodesT - $prevnodesT, $thynodesT, $fullnodesT,
-		           $thynodesC, $thynodesP, $fullnodesC, $fullnodesP,
-	                   $prevedges, $thyedges - $prevedges, $thyedges, $fulledges
-			   if $_verbose{'RAW'};
+        "### LEVEL %s: NODES %d prev + %d new = %d total from %d / %d child + %d parent from %d child + %d parent".
+        " : EDGES %d prev + %d new = %d total from %d.\n",
+        $numlvl, scalar(@thyids),
+        $STATUS{'FOUND'}, $STATUS{'MISSING'}, $STATUS{'SUBGRAPH'},
+        $numlvl, $prevnodesT, $thynodesT - $prevnodesT, $thynodesT, $fullnodesT,
+        $thynodesC, $thynodesP, $fullnodesC, $fullnodesP,
+        $prevedges, $thyedges - $prevedges, $thyedges, $fulledges
+        if $_verbose{'RAW'};
 
     ## OUTPUT
 
     # Save interations to file + expand IDS
     my $ofile = $fileprefix."_graph_lvl".$numlvl.".dot";
+    my $Ofile = $fileprefix."_graph_lvl".$numlvl."_split.dot";
     my $gfile = $fileprefix."_graph_lvl".$numlvl.".graphml";
     my $jfile = $fileprefix."_graph_lvl".$numlvl.".json";
     my $xfile = $fileprefix."_graph_web_lvl".$numlvl.".json";
 
     printf STDERR "### LEVEL %s: WRITING GRAPH DATA into: %s\n", $numlvl, $ofile if $_verbose{'RAW'};
     open(DOTFILE, "> $ofile") || die("### ERROR ### Cannot open dot(lvl:$numlvl) file: $ofile\n");
+    open(DOSFILE, "> $Ofile") || die("### ERROR ### Cannot open dot(lvl:$numlvl) split file: $Ofile\n");
     open(XMLFILE, "> $gfile") || die("### ERROR ### Cannot open graphml(lvl:$numlvl) file: $gfile\n");
     open(JSNFILE, "> $jfile") || die("### ERROR ### Cannot open json(lvl:$numlvl) file: $jfile\n");
 
@@ -1281,14 +1361,14 @@ sub build_graph($$$$$$$$$) {
     my $jstr = '';
 
     foreach my $g (keys %GNG) {
-	my $thylvl = (exists($subgraph->{$g}) && defined($subgraph->{$g}{'LVL'})) ? $MAXLVLS + $subgraph->{$g}{'LVL'} : undef;
-	my $thycol = (defined($thylvl)
-		      ? $BGCOL[ $thylvl ]
-		      : (exists($rids->{$g}) ? $DVCOL : $NACOL));
-	$jstr .= ($jstr ne q{} ? ",\n" : '') .
-	    &json_node_ext($g, $GNG{$g}{"C"}, $GNG{$g}{"P"}, $thycol,
-			   (exists($DVgns->{$g}{'FLG'}) && exists($DVgns->{$g}{'FLG'}[4])
-			    ? $DVgns->{$g}{'FLG'}[4] : 0));
+        my $thylvl = (exists($subgraph->{$g}) && defined($subgraph->{$g}{'LVL'})) ? $MAXLVLS + $subgraph->{$g}{'LVL'} : undef;
+        my $thycol = (defined($thylvl)
+                      ? $BGCOL[ $thylvl ]
+                      : (exists($rids->{$g}) ? $DVCOL : $NACOL));
+        $jstr .= ($jstr ne q{} ? ",\n" : '') .
+            &json_node_ext($g, $GNG{$g}{"C"}, $GNG{$g}{"P"}, $thycol,
+                           (exists($DVgns->{$g}{'FLG'}) && exists($DVgns->{$g}{'FLG'}[4])
+                            ? $DVgns->{$g}{'FLG'}[4] : 0));
     };
 
     open(EXTJSN,  "> $xfile") || die("### ERROR ### Cannot open web json(lvl:$numlvl) file: $xfile\n");
@@ -1297,10 +1377,17 @@ sub build_graph($$$$$$$$$) {
     undef %GNG;
 
     # print DOTFILE "digraph G {\n graph [ splines = true, overlap = false, dpi=\"72\" ];\n node [ style = filled ];\n";
-    print DOTFILE "digraph G {\n graph [ splines = true, overlap = true, dpi=\"72\" ];\n node [ style = filled ];\n";
+    print DOTFILE "digraph G {\n".
+        "\tgraph [splines=true,overlap=true,dpi=\"72\"];\n".
+        "\t node [style=filled];\n".
+        "\t edge [color=\"#000000\"];\n";
+    print DOSFILE "digraph G {\n".
+        "\tgraph [splines=true,overlap=true,dpi=\"72\"];\n".
+        "\t node [style=filled];\n".
+        "\t edge [color=\"#888888\"];\n";
     print XMLFILE &graphml_header();
     # print JSNFILE &json_header(); # comments are not allowed in the JSON file
-                                    # unless a >>'__comment': "blabla"<< element of type string is included
+    # unless a >>'__comment': "blabla"<< element of type string is included
 
     my @nodes = ();
     my @edges = ();
@@ -1311,64 +1398,82 @@ sub build_graph($$$$$$$$$) {
 
     foreach my $idA (@thyids) {
 
-	$thylvl = (exists($subgraph->{$idA}) && defined($subgraph->{$idA}{'LVL'})) ? $MAXLVLS + $subgraph->{$idA}{'LVL'} : undef;
+        $thylvl = (exists($subgraph->{$idA}) && defined($subgraph->{$idA}{'LVL'})) ? $MAXLVLS + $subgraph->{$idA}{'LVL'} : undef;
 
-	$thycol = (defined($thylvl)
-		   ? $BGCOL[ $thylvl ]
-		   : (exists($rids->{$idA}) ? $DVCOL : $NACOL));
+        $thycol = (defined($thylvl)
+                   ? $BGCOL[ $thylvl ]
+                   : (exists($rids->{$idA}) ? $DVCOL : $NACOL));
 
-	exists($idcount{"NODES"}{$idA}) || do {
-	    printf DOTFILE "\t\"%s\" [ color = \"%s\" ]; // B\n", $idA, $thycol;
-	    $idcount{"NODES"}{$idA} = $idcount{"NNODE"}++;
-	    print  XMLFILE &graphml_node($idcount{"NODES"}{$idA}, $idA, $thycol,
-					 (exists($adesc->{$idA}) ? $adesc->{$idA} : undef));
-	    push @nodes, &json_node($idcount{"NODES"}{$idA}, $idA, $thycol);
-	};
+        exists($idcount{"NODES"}{$idA}) || do {
+            printf DOTFILE "\t\"%s\" [color=\"%s\"]; // A\n", $idA, $thycol;
+            printf DOSFILE "\t\"%s\" [color=\"%s\"]; // A\n", $idA, $thycol;
+            $idcount{"NODES"}{$idA} = $idcount{"NNODE"}++;
+            print  XMLFILE &graphml_node($idcount{"NODES"}{$idA}, $idA, $thycol,
+                                         (exists($adesc->{$idA}) ? $adesc->{$idA} : undef),
+                                         $subgraph->{$idA}{'ALIASES'});
+            push @nodes, &json_node($idcount{"NODES"}{$idA}, $idA, $thycol);
+        };
 
-	my @adjlst = keys %{ $subgraph->{$idA}{'ADJLST'} };
+        my @adjlst = keys %{ $subgraph->{$idA}{'ADJLST'} };
 
-	foreach my $idB (@adjlst) {
+        foreach my $idB (@adjlst) {
 
-	    $mylvl = (exists($subgraph->{$idB}) && defined($subgraph->{$idB}{'LVL'})) ? $MAXLVLS + $subgraph->{$idB}{'LVL'} : undef;
+            $mylvl = (exists($subgraph->{$idB}) && defined($subgraph->{$idB}{'LVL'})) ? $MAXLVLS + $subgraph->{$idB}{'LVL'} : undef;
 
-	    $mycol = (defined($mylvl)
-		      ? $BGCOL[ $mylvl ]
-		      : (exists($rids->{$idB}) ? $DVCOL : $NACOL));
+            $mycol = (defined($mylvl)
+                      ? $BGCOL[ $mylvl ]
+                      : (exists($rids->{$idB}) ? $DVCOL : $NACOL));
 
-	    exists($idcount{"NODES"}{$idB}) || do {
-		printf DOTFILE "\t\"%s\" [ color = \"%s\" ]; // C\n", $idB, $mycol;
-		$idcount{"NODES"}{$idB} = $idcount{"NNODE"}++;
-		print  XMLFILE &graphml_node($idcount{"NODES"}{$idB}, $idB, $mycol,
-					     (exists($adesc->{$idB}) ? $adesc->{$idB} : undef));
-		push @nodes, &json_node($idcount{"NODES"}{$idB}, $idB, $mycol);
-	    };
+            exists($idcount{"NODES"}{$idB}) || do {
+                printf DOTFILE "\t\"%s\" [color=\"%s\"]; // B\n", $idB, $mycol;
+                printf DOSFILE "\t\"%s\" [color=\"%s\"]; // B\n", $idB, $mycol;
+                $idcount{"NODES"}{$idB} = $idcount{"NNODE"}++;
+                print  XMLFILE &graphml_node($idcount{"NODES"}{$idB}, $idB, $mycol,
+                                             (exists($adesc->{$idB}) ? $adesc->{$idB} : undef),
+                                             $subgraph->{$idB}{'ALIASES'});
+                push @nodes, &json_node($idcount{"NODES"}{$idB}, $idB, $mycol);
+            };
 
-	    exists($idcount{"EDGES"}{$idA.$idB}) || do {
-		my $weight = exists($subgraph->{$idA}{'ADJLST'}{$idB}) ? scalar(keys %{ $subgraph->{$idA}{'ADJLST'}{$idB} }) : 1;
-		printf DOTFILE "\t\"%s\" -> \"%s\" [arrowhead = normal, color = \"%s\"];\n",
-		               $idA, $idB, $LNCOL[0];
-		$idcount{"EDGES"}{$idA.$idB} = $idcount{"NEDGE"}++;
-		print  XMLFILE &graphml_edge($idcount{"EDGES"}{$idA.$idB},
-					     $idcount{"NODES"}{$idA},
-					     $idcount{"NODES"}{$idB},
-					     $LNCOL[0], $weight);
-		push @edges, &json_edge($idcount{"EDGES"}{$idA.$idB},
-					$idcount{"NODES"}{$idA},
-					$idcount{"NODES"}{$idB},
-					$LNCOL[0], $weight);
-	    };
+            exists($idcount{"EDGES"}{$idA.$idB}) || do {
+                my ($weight, @wgs, $iary);
+                $iary = (exists($subgraph->{$idA}{'ADJLST'}{$idB}) && exists($subgraph->{$idA}{'ADJLST'}{$idB}{'T'}))
+                        ? $subgraph->{$idA}{'ADJLST'}{$idB}
+                        : { 'P' => [ 0 ], 'G' => [ 0 ], 'U' => [ 0 ], 'T' => 0 };
+                ($weight, @wgs) = ($iary->{'T'}, $iary->{'P'}[0], $iary->{'G'}[0], $iary->{'U'}[0]);
+                                  # ($weight, @wgs) = &count_interactions_by_type($subgraph, $idA, $idB, \%iary);
+                # my $weight = exists($subgraph->{$idA}{'ADJLST'}{$idB}) ? scalar(keys %{ $subgraph->{$idA}{'ADJLST'}{$idB} }) : 1;
+                printf DOTFILE "\t\"%s\"->\"%s\" [arrowhead=normal,weight=%s,penwidth=%s,color=\"%s\",iphy=%d,igen=%d,iunk=%d];\n",
+                               $idA, $idB, $weight, $weight+1, $LNCOL[0], @wgs;
+                for (my $wi = 0; $wi < 3; $wi++) {
+                    my $w = $wgs[$wi];
+                    next unless $w > 0;
+                    printf DOSFILE "\t\"%s\"->\"%s\" [arrowhead=normal,weight=%s,penwidth=%s,color=\"%s\"];\n",
+                                   $idA, $idB, $w, $w, $EDGECOL[$wi];
+                };    
+                $idcount{"EDGES"}{$idA.$idB} = $idcount{"NEDGE"}++;
+                print  XMLFILE &graphml_edge($idcount{"EDGES"}{$idA.$idB},
+                                             $idcount{"NODES"}{$idA},
+                                             $idcount{"NODES"}{$idB},
+                                             $LNCOL[0], $weight, $iary);
+                push @edges, &json_edge($idcount{"EDGES"}{$idA.$idB},
+                                        $idcount{"NODES"}{$idA},
+                                        $idcount{"NODES"}{$idB},
+                                        $LNCOL[0], $weight, $iary, $idA, $idB);
+            };
 
-	}; # foreach $idB
+        }; # foreach $idB
 
     }; # foreach $idA
 
     @$ids = @thyids; # %uqids;
 
     print DOTFILE "}\n";
+    print DOSFILE "}\n";
     print XMLFILE &graphml_trailer();
     print JSNFILE &json_trailer(\@nodes, \@edges);
 
     close(DOTFILE);
+    close(DOSFILE);
     close(XMLFILE);
     close(JSNFILE);
 
@@ -1379,8 +1484,8 @@ sub build_graph($$$$$$$$$) {
     my $cmd = "neato -Tsvg $ofile > $svgfile 2> $svgfile.log"; # neato with overlap=false, twopi does not look so well...
     printf STDERR "### LEVEL %s: CREATING GRAPH with COMMAND:\n### %s\n", $numlvl, $cmd if $_verbose{'RAW'};
     abs($numlvl) < 2 && do {
-	system($cmd) if $DRAWflg;
-	# print STDERR Data::Dumper->Dump([ \%GNG ], [ qw/ *GNG / ]),"\n" if $_verbose{'RAW'};
+        system($cmd) if $DRAWflg;
+        # print STDERR Data::Dumper->Dump([ \%GNG ], [ qw/ *GNG / ]),"\n" if $_verbose{'RAW'};
     };
 
 } # build_graph
@@ -1390,54 +1495,111 @@ sub getrbgint($) { # get hex value, return three integers between 0/255
     return ( map { hex("0x".$_) } ($h =~ /([^\#]{2})([^\#]{2})([^\#]{2})/) )
 } # getrbgint
 
-sub save_full_graph($$$) {
-    my ($fileprefix, $graph, $rids) = @_;
+sub save_full_graph($$$$) { # now must run this step as it simplifies evidence lists (PGU)
+    my ($fileprefix, $graph, $rids, $adesc) = @_;
 
     my $ofile = $fileprefix."_wholegraph.dot";
+    my $Ofile = $fileprefix."_wholegraph_split.dot";
+    my $gfile = $fileprefix."_wholegraph.graphml";
+    my $jfile = $fileprefix."_wholegraph.json";
+
     printf STDERR "### WRITING WHOLE GRAPH DATA into: %s ...", $ofile if $_verbose{'RAW'};
-    open(DOTFILE, "> $ofile") || die("### ERROR ### Cannot open dot file: $ofile\n");
-    print DOTFILE "digraph G {\n graph [ splines = true, overlap = true, dpi=\"72\" ];\n node [ style = filled ];\n";
+    open(DOTFILE, "> $ofile") || die("### ERROR ### Cannot open whole-graph dot file: $ofile\n");
+    open(DOSFILE, "> $Ofile") || die("### ERROR ### Cannot open whole-graph dot split file: $Ofile\n");
+    open(XMLFILE, "> $gfile") || die("### ERROR ### Cannot open whole-graph graphml file: $gfile\n");
+    open(JSNFILE, "> $jfile") || die("### ERROR ### Cannot open json(whole-graph) file: $jfile\n");
+
+    print DOTFILE "digraph G {\n".
+        "\tgraph [splines=true,overlap=true,dpi=\"72\"];\n".
+        "\t node [style=filled];\n".
+        "\t edge [color=\"#000000\"];\n";
+    print DOSFILE "digraph G {\n".
+        "\tgraph [splines=true,overlap=true,dpi=\"72\"];\n".
+        "\t node [style=filled];\n".
+        "\t edge [color=\"#888888\"];\n";
+    print XMLFILE &graphml_header();
 
     my ($thylvl, $nxtlvl, $mylvl, $mychldflg, $thycol, $mycol);
     my %idcount = ( "NNODE" => 0, "NODES" => {}, "NEDGE" => 0, "EDGES" => {});
 
     my @thyids = keys %$graph;
 
+    my @nodes = ();
+    my @edges = ();
+    my $dvcol = '#bb2d2b'; # $DVCOL
     foreach my $idA (@thyids) {
 
-	$thycol = exists($rids->{$idA}) ? $DVCOL : $NACOL;
+        $thycol = exists($rids->{$idA}) ? $dvcol : $NACOL;
 
-	exists($idcount{"NODES"}{$idA}) || do {
-	    printf DOTFILE "\t\"%s\" [ color = \"%s\" ]; // B\n", $idA, $thycol;
-	    $idcount{"NODES"}{$idA} = $idcount{"NNODE"}++;
-	};
+        exists($idcount{"NODES"}{$idA}) || do {
+            printf DOTFILE "\t\"%s\" [color=\"%s\"]; // A\n", $idA, $thycol;
+            printf DOSFILE "\t\"%s\" [color=\"%s\"]; // A\n", $idA, $thycol;
+            $idcount{"NODES"}{$idA} = $idcount{"NNODE"}++;
+            print  XMLFILE &graphml_node($idcount{"NODES"}{$idA}, $idA, $thycol,
+                                         (exists($adesc->{$idA}) ? $adesc->{$idA} : undef),
+                                         $graph->{$idA}{'ALIASES'});
+            push @nodes, &json_node($idcount{"NODES"}{$idA}, $idA, $thycol);
+        };
 
-	my @adjlst = keys %{ $graph->{$idA}{'ADJLST'} };
+        my @adjlst = keys %{ $graph->{$idA}{'ADJLST'} };
 
-	foreach my $idB (@adjlst) {
+        foreach my $idB (@adjlst) {
 
-	    $mycol = exists($rids->{$idB}) ? $DVCOL : $NACOL;
+            $mycol = exists($rids->{$idB}) ? $dvcol : $NACOL;
 
-	    exists($idcount{"NODES"}{$idB}) || do {
-		printf DOTFILE "\t\"%s\" [ color = \"%s\" ]; // C\n", $idB, $mycol;
-		$idcount{"NODES"}{$idB} = $idcount{"NNODE"}++;
-	    };
+            exists($idcount{"NODES"}{$idB}) || do {
+                printf DOTFILE "\t\"%s\" [color=\"%s\"]; // B\n", $idB, $mycol;
+                printf DOSFILE "\t\"%s\" [color=\"%s\"]; // B\n", $idB, $mycol;
+                $idcount{"NODES"}{$idB} = $idcount{"NNODE"}++;
+                print  XMLFILE &graphml_node($idcount{"NODES"}{$idB}, $idB, $thycol,
+                                             (exists($adesc->{$idB}) ? $adesc->{$idB} : undef),
+                                             $graph->{$idB}{'ALIASES'});
+                push @nodes, &json_node($idcount{"NODES"}{$idB}, $idB, $thycol);
+            };
 
-	    exists($idcount{"EDGES"}{$idA.$idB}) || do {
-		my $weight = exists($graph->{$idA}{'ADJLST'}{$idB}) ? scalar(keys %{ $graph->{$idA}{'ADJLST'}{$idB} }) : 1;
-		printf DOTFILE "\t\"%s\" -> \"%s\" [arrowhead = normal, weight = \"%s\", color = \"%s\"];\n",
-		               $idA, $idB, $weight, $DFCOL;
-		$idcount{"EDGES"}{$idA.$idB} = $idcount{"NEDGE"}++;
-	    };
+            exists($idcount{"EDGES"}{$idA.$idB}) || do {
+                my ($weight, @wgs);
+                ($weight, @wgs) = &count_interactions_by_type($graph, $idA, $idB);
+                # my $weight = exists($graph->{$idA}{'ADJLST'}{$idB}) ? scalar(keys %{ $graph->{$idA}{'ADJLST'}{$idB} }) : 1;
+                printf DOTFILE "\t\"%s\"->\"%s\" [arrowhead=normal,weight=%s,penwidth=%s,color=\"%s\",iphy=%d,igen=%d,iunk=%d];\n",
+                               $idA, $idB, $weight, $weight+1, $DFCOL, @wgs;
+                for (my $wi = 0; $wi < 3; $wi++) {
+                    my $w = $wgs[$wi];
+                    next unless $w > 0;
+                    printf DOSFILE "\t\"%s\"->\"%s\" [arrowhead=normal,weight=%s,penwidth=%s,color=\"%s\"];\n",
+                                   $idA, $idB, $w, $w, $EDGECOL[$wi];
+                };    
+                $idcount{"EDGES"}{$idA.$idB} = $idcount{"NEDGE"}++;
+                print  XMLFILE &graphml_edge($idcount{"EDGES"}{$idA.$idB},
+                                             $idcount{"NODES"}{$idA},
+                                             $idcount{"NODES"}{$idB},
+                                             $LNCOL[0], $weight, $graph->{$idA}{'ADJLST'}{$idB}); # \%iary);
+                push @edges, &json_edge($idcount{"EDGES"}{$idA.$idB},
+                                        $idcount{"NODES"}{$idA},
+                                        $idcount{"NODES"}{$idB},
+                                        $LNCOL[0], $weight, $graph->{$idA}{'ADJLST'}{$idB}, $idA, $idB); # \%iary);
+            };
 
-	}; # foreach $idB
+        }; # foreach $idB
 
     }; # foreach $idA
 
     print DOTFILE "}\n";
+    print DOSFILE "}\n";
+    print XMLFILE &graphml_trailer();
+    print JSNFILE &json_trailer(\@nodes, \@edges);
+    
     close(DOTFILE);
+    close(DOSFILE);
+    close(XMLFILE);
+    close(JSNFILE);
+    
+    undef %idcount;
 
     print STDERR "...DONE\n" if $_verbose{'RAW'};
+
+    print STDERR "### Evidence arrays simplified...\n",
+                 Data::Dumper->Dump([ $graph ], [ qw( *GRAPH ) ]),"\n" if $_verbose{'DEBUG'};
 
 } # save_full_graph $outprefix, \%GRAPH, \%DVgenes);
 
@@ -1474,45 +1636,67 @@ sub graphml_node(@) {
     my @par = @_;
     my @IA = qw/ ISHUGO HG AC EN SP OT /;
     scalar(@par) > 2 && do {
-	my @rgb = &getrbgint($par[2]);
-	my $dt = (exists($par[3]) && defined($par[3]))
-	    ? join("", map { sprintf("       <nodeinfo key=\"%s\">%s</nodeinfo>\n",
-				     $_, exists($par[3]->{$_}) ? $par[3]->{$_} : "NA")
-		             } @IA )
-	    : "NA";
-	return sprintf("  <node id=\"%s\">\n".
-		       "   <data key=\"label\">%s</data>\n".
-		       "   <data key=\"r\">%d</data>\n".
-		       "   <data key=\"g\">%d</data>\n".
-		       "   <data key=\"b\">%d</data>\n".
-		       "   <data key=\"ndata\">\n%s</data>\n".
-		       "  </node>\n",
-		       $par[0], $par[1], @rgb, $dt);
-	               # $idcount{"NODES"}{$idA}, $idA, $RGBhex ...
+        my @rgb = &getrbgint($par[2]);
+        my $dt = (exists($par[3]) && defined($par[3]))
+            ? join("", map { sprintf("       <nodeinfo key=\"%s\">%s</nodeinfo>\n",
+                                     $_, exists($par[3]->{$_}) ? $par[3]->{$_} : "NA")
+                   } @IA )
+            : "NA";
+        $dt .= (exists($par[4]) && defined($par[4]))
+            ? sprintf("       <nodeinfo key=\"aliases\"> %s </nodeinfo>\n", join(", ", @{ $par[4] }))
+            : '';
+        return sprintf("  <node id=\"%s\">\n".
+                       "   <data key=\"label\">%s</data>\n".
+                       "   <data key=\"r\">%d</data>\n".
+                       "   <data key=\"g\">%d</data>\n".
+                       "   <data key=\"b\">%d</data>\n".
+                       "   <data key=\"ndata\">\n%s   </data>\n".
+                       "  </node>\n",
+                       $par[0], $par[1], @rgb, $dt);
+        # $idcount{"NODES"}{$idA}, $idA, $RGBhex ...
     };
     return sprintf("  <node id=\"%s\" label=\"%s\"/>\n",
-		   @par); # $idcount{"NODES"}{$idA}, $idA
+                   @par); # $idcount{"NODES"}{$idA}, $idA
 } # graphml_node
 
 sub graphml_edge(@) {
+    my %Ikeys = qw( P physical G genetic U unknown );
     my @par = @_;
     scalar(@par) > 3 && do {
-	my @rgb = &getrbgint($par[3]);
-	my $dt = (exists($par[5]) && defined($par[5]))
-	    ? join("", map { sprintf("       <edgeinfo key=\"ref\">%s</edgeinfo>\n", $_) } @{ $par[5] } )
-	    : "NA";
-	return sprintf("  <edge id=\"e%d\" directed=\"true\" source=\"%s\" target=\"%s\">\n".
-		       "   <data key=\"r\">%d</data>\n".
-		       "   <data key=\"g\">%d</data>\n".
-		       "   <data key=\"b\">%d</data>\n".
-		       "   <data key=\"weight\">%.3f</data>\n".
-		       "   <data key=\"edata\">\n%s</data>\n".
-		       "  </edge>\n",
-		       $par[0], $par[1], $par[2], @rgb, exists($par[4]) ? $par[4] : 1, $dt);
-	# $idcount{"EDGES"}{$idA.$idB}, $idcount{"NODES"}{$idA}, $idcount{"NODES"}{$idB}, $RGBhex ...
+        my @rgb = &getrbgint($par[3]);
+        my $wg = exists($par[4]) ? $par[4] : 0;
+        my $dt = "NA";
+        exists($par[5]) && do {
+            my ($r, $T, $count, @refs, $cm, $einfo);
+            $r = $par[5];
+            $dt = '';
+            foreach $T (qw/ P G U /) {
+                ($count, @refs) = @{ $r->{$T} };
+                $einfo = $count > 0
+                    ? join('',
+                           map {
+                               my $g = $_;
+                               $g =~ s/[\<\>]/:/og;
+                               sprintf("        <edgeref>%s</edgeref>\n", $g)
+                           } @refs )
+                    : '';
+                $dt .= sprintf("       <edgeinfo key=\"%s\">\n".
+                               "        <edgecount>%s</edgecount>\n%s".
+                               "       </edgeinfo>\n", $Ikeys{$T}, $count, $einfo);
+            };
+        };
+        return sprintf("  <edge id=\"e%d\" directed=\"true\" source=\"%s\" target=\"%s\">\n".
+                       "   <data key=\"r\">%d</data>\n".
+                       "   <data key=\"g\">%d</data>\n".
+                       "   <data key=\"b\">%d</data>\n".
+                       "   <data key=\"weight\">%.3f</data>\n".
+                       "   <data key=\"edata\">\n%s   </data>\n".
+                       "  </edge>\n",
+                       $par[0], $par[1], $par[2], @rgb, exists($par[4]) ? $par[4] : 1, $dt);
+        # $idcount{"EDGES"}{$idA.$idB}, $idcount{"NODES"}{$idA}, $idcount{"NODES"}{$idB}, $RGBhex ...
     };
     return sprintf("  <edge id=\"e%d\" directed=\"true\" source=\"%s\" target=\"%s\"/>\n",
-		   @par);
+                   @par);
 } # graphml_edge
 
 sub graphml_trailer() {
@@ -1535,10 +1719,10 @@ sub json_node_ext($$$$$) {
     my @P = keys %$prf;
     $flg = 0 unless defined($flg);
     return '  "'.$id.'": {'."\n".
-           '      "child":  [ '.(scalar(@C) > 0 ? join(", ", map { "\"$_\"" } @C) : q{}).' ],'."\n".
-           '      "parent": [ '.(scalar(@P) > 0 ? join(", ", map { "\"$_\"" } @P) : q{}).' ],'."\n".
-           '      "color": "'.$col.'",'."\n".
-           '      "synd": "'.$flg.'" }';
+        '      "child":  [ '.(scalar(@C) > 0 ? join(", ", map { "\"$_\"" } @C) : q{}).' ],'."\n".
+        '      "parent": [ '.(scalar(@P) > 0 ? join(", ", map { "\"$_\"" } @P) : q{}).' ],'."\n".
+        '      "color": "'.$col.'",'."\n".
+        '      "synd": "'.$flg.'" }';
 } # json_node_ext
 
 #-------------> Cytoscape format
@@ -1593,50 +1777,79 @@ EOF
 sub json_node(@) {
     my @par = @_;
     scalar(@par) > 2 && do {
-	# my @rgb = &getrbgint($par[2]);
-	# my $dt = exists($par[3])
-	#     ? scalar(@{ $par[3] })
-	#     : "";
-	return sprintf("  { data: {\n".
-                       "      'id' : '%s',\n".
-		       "      'name' : '%s',\n".
-		       "      'background-color' : '%s',\n".
-		       "      'weight' : %s\n".
-		       "    } }",
-		       $par[0], $par[1], $par[2], exists($par[3]) ? scalar($par[3]) : 1);
-	               # $idcount{"NODES"}{$idA}, $idA, $RGBhex ...
+        # my @rgb = &getrbgint($par[2]);
+        # my $dt = exists($par[3])
+        #     ? scalar(@{ $par[3] })
+        #     : "";
+        return sprintf("  { \"data\": {\n".
+                       "      \"id\" : \"%s\",\n".
+                       "      \"name\" : \"%s\",\n".
+                       "      \"background-color\" : \"%s\",\n".
+                       "      \"weight\" : %s\n".
+                       "    } }",
+                       $par[0], $par[1], $par[2], exists($par[3]) ? scalar($par[3]) : 1);
+        # $idcount{"NODES"}{$idA}, $idA, $RGBhex ...
     };
-    return sprintf("  { data: {\n".
-		   "      'id' : '%s',\n".
-		   "      'name' : '%s'\n".
-		   "    } }",
-		   @par);
-                   # $idcount{"NODES"}{$idA}, $idA
+    return sprintf("  { \"data\": {\n".
+                   "      \"id\" : \"%s\",\n".
+                   "      \"name\" : \"%s\"\n".
+                   "    } }",
+                   @par);
+    # $idcount{"NODES"}{$idA}, $idA
 } # json_node
 
 sub json_edge(@) {
     my @par = @_;
     scalar(@par) > 3 && do {
-	# my @rgb = &getrbgint($par[3]);
-	# my $dt = exists($par[5])
-	#     ? scalar(@{ $par[5] })
-	#     : "";
-	return sprintf("  { data: {\n".
-                       "      'id' : 'e%s',\n".
-		       "      'source' : '%s',\n".
-		       "      'target' : '%s',\n".
-		       "      'background-color' : '%s',\n".
-		       "      'strength' : %s\n".
-		       "    } }",
-		       $par[0], $par[1], $par[2], $par[3], exists($par[4]) ? $par[4] : 1);
-                       # $idcount{"EDGES"}{$idA.$idB}, $idcount{"NODES"}{$idA}, $idcount{"NODES"}{$idB}, $RGBhex ...
+        # my @rgb = &getrbgint($par[3]);
+        # my $dt = exists($par[5])
+        #     ? scalar(@{ $par[5] })
+        #     : "";
+        my $wg = exists($par[4]) ? $par[4] : 0;
+        my $str = "\n";
+        my ($ga, $gb) = ($par[1], $par[2]);
+        scalar(@par) > 5 && do {
+            my $r = $par[5];
+            $str = sprintf(",\n      \"evidences\" : {\n".
+                           "        \"physical\" : %s,\n".
+                           "         \"genetic\" : %s,\n".
+                           "         \"unknown\" : %s\n".
+                           "      }\n",
+                           map {
+                               my ($count, @refs, $cm);
+                               ($count, @refs) = @{ $r->{$_} };
+                               $cm = scalar(@refs) > 0 ? ',' : '';
+                               sprintf("[ %d%s %s ]",
+                                       $count, $cm,
+                                       join(", ",
+                                            map {
+                                                my $s = $_;
+                                                $s =~ s/[\"\'`´]/\'/og;
+                                                '"'.$s.'"'
+                                            } @refs))
+                           } qw/ P G U / );
+        };
+        scalar(@par) > 6 && do {
+            ($ga, $gb) = ($par[6], $par[7]);
+        };
+        return sprintf("  { \"data\": {\n".
+                       "      \"id\" : \"e%s\",\n".
+                       "      \"source\" : \"%s\",\n".
+                       "      \"srclbl\" : \"%s\",\n".
+                       "      \"target\" : \"%s\",\n".
+                       "      \"tgtlbl\" : \"%s\",\n".
+                       "      \"background-color\" : \"%s\",\n".
+                       "      \"strength\" : %s%s".
+                       "    } }",
+                       $par[0], $par[1], $ga, $par[2], $gb, $par[3], $wg, $str);
+        # $idcount{"EDGES"}{$idA.$idB}, $idcount{"NODES"}{$idA}, $idcount{"NODES"}{$idB}, $RGBhex ...
     };
-    return sprintf("  { data: {\n".
-		   "      'id' : 'e%s',\n".
-		   "      'source' : '%s',\n".
-		   "      'target' : '%s'\n".
-		   "    } }",
-		   @par);
+    return sprintf("  { \"data\": {\n".
+                   "      \"id\" : \"e%s\",\n".
+                   "      \"source\" : \"%s\",\n".
+                   "      \"target\" : \"%s\"\n".
+                   "    } }",
+                   @par);
 
 } # json_edge
 
@@ -1647,12 +1860,12 @@ sub json_trailer($$) {
     $edges_str = join(",\n", @$edges) if scalar(@$edges) > 0;
     return <<"EOF";
 {
- "nodes" : [
+  "nodes" : [
 $nodes_str
- ],
- "edges" : [
+  ],
+  "edges" : [
 $edges_str
- ]
+  ]
 }
 EOF
 } # json_trailer
@@ -1668,7 +1881,7 @@ EOF
 
 sub compute_shortests_paths($$$$$$$) { # using Graph::Directed
     my ($fileprefix, $R, $DVids, $ids, $sdi, $adesc, $DVgns, $graph, $apsp, @vertices, $path_len,
-	%GNG, %SKEL, @IDS, @DVs, %fnd, @NWIDS, $L, $l, $lids, @T, $STR, $cmd, $gfile, @nodes, @edges);
+        %GNG, %SKEL, @IDS, @DVs, %fnd, @NWIDS, $L, $l, $lids, @T, $STR, $cmd, $gfile, @nodes, @edges);
 
     ($fileprefix, $R, $DVids, $ids, $sdi, $adesc, $DVgns) = @_;
 
@@ -1678,25 +1891,29 @@ sub compute_shortests_paths($$$$$$$) { # using Graph::Directed
     my $ofile = $fileprefix."_graph_allpaths.dot";
     my $oXfile = $fileprefix."_graph_allpaths.graphml";
     my $dfile = $fileprefix."_graph_skeleton.dot";
+    my $Dfile = $fileprefix."_graph_skeleton_split.dot";
     my $dXfile = $fileprefix."_graph_skeleton.graphml";
     my $dJfile = $fileprefix."_graph_skeleton.json"; # level 0
     # EXTJSN fileprefix_graph_web_skeleton.json is computed at the end
 
     open(DOTFILE, "> $ofile") || die("### ERROR ### Cannot open dot(allpaths) file: $ofile\n");
     open(SKLFILE, "> $dfile") || die("### ERROR ### Cannot open dot(skeleton) file: $dfile\n");
+    open(SKSFILE, "> $Dfile") || die("### ERROR ### Cannot open dot(skeleton) split file: $Dfile\n");
     open(DOXFILE, "> $oXfile") || die("### ERROR ### Cannot open graphml(allpaths) file: $oXfile\n");
     open(SKXFILE, "> $dXfile") || die("### ERROR ### Cannot open graphml(skeleton) file: $dXfile\n");
     open(JSNFILE, "> $dJfile") || die("### ERROR ### Cannot open json(skeleton) file: $dJfile\n");
 
     $STR = "digraph G {\n".
-	   "\tgraph [ splines = true, overlap = false, dpi=\"72\" ];\n".
-	   "\t node [ style = filled, color = \"$defcol\" ];\n";
+        "\tgraph [splines=true,overlap=false,dpi=\"72\"];\n".
+        "\t node [style=filled,color=\"$defcol\"];\n".
+        "\t edge [color=\"#888888\"];\n";
     print DOTFILE $STR;
     print SKLFILE $STR;
+    print SKSFILE $STR;
     print DOXFILE &graphml_header();
     print SKXFILE &graphml_header();
     my %idcount = ( "FULL" => { "NNODE" => 0, "NODES" => {}, "NEDGE" => 0, "EDGES" => {} },
-		    "SKEL" => { "NNODE" => 0, "NODES" => {}, "NEDGE" => 0, "EDGES" => {} });
+                    "SKEL" => { "NNODE" => 0, "NODES" => {}, "NEDGE" => 0, "EDGES" => {} });
 
     # Initialize graph
     %SKEL = ();
@@ -1710,10 +1927,10 @@ sub compute_shortests_paths($$$$$$$) { # using Graph::Directed
     print STDERR "##--> Initializing Paths GRAPH [nodes = $lids]...\n" if $_verbose{'RAW'};
 
     foreach my $A (@IDS) {
-	foreach my $B (keys %{ $R->{$A}{'ADJLST'} }) {
-	    $graph->add_edge($A, $B);
-	    # $graph->add_weighted_edge($A, $B, scalar(keys %{ $R->{$A}{'ADJLST'}{$B} }));
-	};
+        foreach my $B (keys %{ $R->{$A}{'ADJLST'} }) {
+            $graph->add_edge($A, $B);
+            # $graph->add_weighted_edge($A, $B, scalar(keys %{ $R->{$A}{'ADJLST'}{$B} }));
+        };
     };
 
     # Getting the DV genes nodes
@@ -1722,12 +1939,12 @@ sub compute_shortests_paths($$$$$$$) { # using Graph::Directed
     %fnd = ();
     %GNG = (); # gene sub-graph
     foreach my $r (@NWIDS) {
-	exists($fnd{$r}) || do {
-	    $fnd{$r} = 0;
-	    push @DVs, $r;
-	    &init_adjlist(\%SKEL, $r); # ensuring to have at least all the DVgenes on the output graphs
-	};
-	$fnd{$r}++;
+        exists($fnd{$r}) || do {
+            $fnd{$r} = 0;
+            push @DVs, $r;
+            &init_adjlist(\%SKEL, $r); # ensuring to have at least all the DVgenes on the output graphs
+        };
+        $fnd{$r}++;
     };
     $L = $#DVs;
     $l = $L + 1;
@@ -1752,84 +1969,112 @@ sub compute_shortests_paths($$$$$$$) { # using Graph::Directed
     #   for (my $i = 0; $i < $L; $i++) {
     #     for (my $j = $i + 1; $j < $l; $j++) {
     #
+    my %edgecount = ();
     for (my $i = 0; $i < $l; $i++) {
-	for (my $j = 0; $j < $l; $j++) {
-	    $i == $j && next;
+        for (my $j = 0; $j < $l; $j++) {
+            $i == $j && next;
             #
-	    my ($A, $B) = ($DVs[$i], $DVs[$j]);
-	    exists($GNG{$A}) || ($GNG{$A} = {});
-	    exists($GNG{$B}) || ($GNG{$B} = {});
-	    printf STDERR ":%05d: ----> %s [%d] x %s [%d]", ++$c, $A, $i, $B, $j if $_verbose{'RAW'};
-	    #APSP# @vertices = $apsp->path_vertices($A, $B);
-	    #APSP# $path_len = $apsp->path_length($A, $B);
-	    @vertices = $graph->SP_Dijkstra($A, $B);
-	    $path_len = scalar(@vertices);
-	    # print STDERR Data::Dumper->Dump([ $paths ],[ qw/ *paths / ]) if $_verbose{'RAW'};
-	    ($path_len == 0) && do {
-	    	print STDERR " ... NO PATH FOUND\n" if $_verbose{'RAW'};
-	    	next;
-	    };
-	    print STDERR " ... GOT A PATH with $path_len NODES\n" if $_verbose{'RAW'}; # in ",&timing(\@T),"\n";
-	    foreach my $g (@vertices) {
-		exists($fnd{$g}) || do {
-		    my $mycol = exists($DVids->{$g}) ? $thycol : $newcol;
-		    $STR = sprintf("\t\"%s\" [ color = \"%s\" ];\n", $g, $mycol);
-		    print DOTFILE $STR;
-		    print SKLFILE $STR;
-		    $idcount{"FULL"}{"NODES"}{$g} = $idcount{"FULL"}{"NNODE"}++;
-		    print DOXFILE &graphml_node($idcount{"FULL"}{"NODES"}{$g}, $g, $mycol,
-						(exists($adesc->{$g}) ? $adesc->{$g} : undef));
-		    $idcount{"SKEL"}{"NODES"}{$g} = $idcount{"SKEL"}{"NNODE"}++;
-		    print SKXFILE &graphml_node($idcount{"SKEL"}{"NODES"}{$g}, $g, $mycol,
-						(exists($adesc->{$g}) ? $adesc->{$g} : undef));
-		    push @nodes, &json_node($idcount{"SKEL"}{"NODES"}{$g}, $g, $mycol);
-		    $fnd{$g}=0;
-		};
-		$fnd{$g}++;
-	    };
-	    print DOTFILE "\t", join("->", map { '"'.$_.'"' } @vertices), ";\n";
-	    for (my $z = 1; $z < scalar(@vertices); $z++) {
-		my ($za,$zb) = ($vertices[$z-1], $vertices[$z]);
-		exists($fnd{$za.$zb}) || do {
-		    my $edgeCol = $edgecol;
-		    $idcount{"FULL"}{"EDGES"}{$za.$zb} = $idcount{"FULL"}{"NEDGE"}++;
-		    print DOXFILE &graphml_edge($idcount{"FULL"}{"EDGES"}{$za.$zb},
-						$idcount{"FULL"}{"NODES"}{$za},
-						$idcount{"FULL"}{"NODES"}{$zb},
-						$edgeCol, 1);
-		    $idcount{"SKEL"}{"EDGES"}{$za.$zb} = $idcount{"SKEL"}{"NEDGE"}++;
-		    print SKLFILE "\t \"$za\"->\"$zb\";\n";
-		    print SKXFILE &graphml_edge($idcount{"SKEL"}{"EDGES"}{$za.$zb},
-						$idcount{"SKEL"}{"NODES"}{$za},
-						$idcount{"SKEL"}{"NODES"}{$zb},
-						$edgeCol, 1);
-		    push @edges, &json_edge($idcount{"SKEL"}{"EDGES"}{$za.$zb},
-					    $idcount{"SKEL"}{"NODES"}{$za},
-					    $idcount{"SKEL"}{"NODES"}{$zb},
-					    $edgeCol, 1);
-		    $fnd{$za.$zb} = 0;
-		};
-	    };
-	    print STDERR "Shortest Path:" .
-		         join("->", @vertices) .
- 		         " Cost:" . $path_len . "\n" if $_verbose{'RAW'};
-	    for (my ($i, $j) = (0, 1); $j < scalar(@vertices); $i++, $j++) {
-		my ($gidA,$gidB) = @vertices[ $i, $j ];
-		&init_adjlist(\%SKEL, $gidA);
-		&init_adjlist(\%SKEL, $gidB);
-		exists($SKEL{$gidA}{'ADJLST'}{$gidB}) || ($SKEL{$gidA}{'ADJLST'}{$gidB} = 0);
-		$SKEL{$gidA}{'ADJLST'}{$gidB}++;
-		exists($GNG{$A}{$gidA}) || ($GNG{$A}{$gidA} = 0);
-		exists($GNG{$A}{$gidB}) || ($GNG{$A}{$gidB} = 0);
-		exists($GNG{$B}{$gidA}) || ($GNG{$B}{$gidA} = 0);
-		exists($GNG{$B}{$gidB}) || ($GNG{$B}{$gidB} = 0);
-		$GNG{$A}{$gidA}++;
-		$GNG{$A}{$gidB}++;
-		$GNG{$B}{$gidA}++;
-		$GNG{$B}{$gidB}++;
-	    };
-	};
+            my ($A, $B) = ($DVs[$i], $DVs[$j]);
+            exists($GNG{$A}) || ($GNG{$A} = {});
+            exists($GNG{$B}) || ($GNG{$B} = {});
+            printf STDERR ":%05d: ----> %s [%d] x %s [%d]", ++$c, $A, $i, $B, $j if $_verbose{'RAW'};
+            #APSP# @vertices = $apsp->path_vertices($A, $B);
+            #APSP# $path_len = $apsp->path_length($A, $B);
+            @vertices = $graph->SP_Dijkstra($A, $B);
+            $path_len = scalar(@vertices);
+            # print STDERR Data::Dumper->Dump([ $paths ],[ qw/ *paths / ]) if $_verbose{'RAW'};
+            ($path_len == 0) && do {
+                print STDERR " ... NO PATH FOUND\n" if $_verbose{'RAW'};
+                next;
+            };
+            print STDERR " ... GOT A PATH with $path_len NODES\n" if $_verbose{'RAW'}; # in ",&timing(\@T),"\n";
+            foreach my $g (@vertices) {
+                exists($fnd{$g}) || do {
+                    my $mycol = exists($DVids->{$g}) ? $thycol : $newcol;
+                    $STR = sprintf("\t\"%s\" [color=\"%s\"];\n", $g, $mycol);
+                    print DOTFILE $STR;
+                    print SKLFILE $STR;
+                    print SKSFILE $STR;
+                    $idcount{"FULL"}{"NODES"}{$g} = $idcount{"FULL"}{"NNODE"}++;
+                    print DOXFILE &graphml_node($idcount{"FULL"}{"NODES"}{$g}, $g, $mycol,
+                                                (exists($adesc->{$g}) ? $adesc->{$g} : undef),
+                                                $R->{$g}{'ALIASES'});
+                    $idcount{"SKEL"}{"NODES"}{$g} = $idcount{"SKEL"}{"NNODE"}++;
+                    print SKXFILE &graphml_node($idcount{"SKEL"}{"NODES"}{$g}, $g, $mycol,
+                                                (exists($adesc->{$g}) ? $adesc->{$g} : undef),
+                                                $R->{$g}{'ALIASES'});
+                    push @nodes, &json_node($idcount{"SKEL"}{"NODES"}{$g}, $g, $mycol);
+                    $fnd{$g}=0;
+                };
+                $fnd{$g}++;
+            };
+            print DOTFILE "\t", join("->", map { '"'.$_.'"' } @vertices), ";\n";
+            for (my $z = 1; $z < scalar(@vertices); $z++) {
+                my ($za,$zb) = ($vertices[$z-1], $vertices[$z]);
+                exists($fnd{$za.$zb}) || do {
+                    $idcount{"FULL"}{"EDGES"}{$za.$zb} = $idcount{"FULL"}{"NEDGE"}++;
+                    $idcount{"SKEL"}{"EDGES"}{$za.$zb} = $idcount{"SKEL"}{"NEDGE"}++;
+                    $edgecount{$za}{$zb}++;
+                    $fnd{$za.$zb} = 0;
+                };
+            };
+            
+            print STDERR "Shortest Path:" .
+                join("->", @vertices) .
+                " Cost:" . $path_len . "\n" if $_verbose{'RAW'};
+            
+            for (my ($i, $j) = (0, 1); $j < scalar(@vertices); $i++, $j++) {
+                my ($gidA,$gidB) = @vertices[ $i, $j ];
+                &init_adjlist(\%SKEL, $gidA);
+                &init_adjlist(\%SKEL, $gidB);
+                exists($SKEL{$gidA}{'ADJLST'}{$gidB}) || ($SKEL{$gidA}{'ADJLST'}{$gidB} = 0);
+                $SKEL{$gidA}{'ADJLST'}{$gidB}++;
+                exists($GNG{$A}{$gidA}) || ($GNG{$A}{$gidA} = 0);
+                exists($GNG{$A}{$gidB}) || ($GNG{$A}{$gidB} = 0);
+                exists($GNG{$B}{$gidA}) || ($GNG{$B}{$gidA} = 0);
+                exists($GNG{$B}{$gidB}) || ($GNG{$B}{$gidB} = 0);
+                $GNG{$A}{$gidA}++;
+                $GNG{$A}{$gidB}++;
+                $GNG{$B}{$gidA}++;
+                $GNG{$B}{$gidB}++;
+            };
+        };
     };
+    #
+    my $edgeCol = $edgecol;
+    foreach my $za (keys %edgecount) {
+        foreach my $zb (keys %{ $edgecount{$za} }) { 
+            my ($wg, @wgs, $iary);
+            $iary = (exists($R->{$za}{'ADJLST'}{$zb}) && exists($R->{$za}{'ADJLST'}{$zb}{'T'}))
+                    ? $R->{$za}{'ADJLST'}{$zb}
+                    : { 'P' => [ 0 ], 'G' => [ 0 ], 'U' => [ 0 ], 'T' => 0 };
+            ($wg, @wgs) = ($iary->{'T'}, $iary->{'P'}[0], $iary->{'G'}[0], $iary->{'U'}[0]);
+                          # ($wg, @wgs) = &count_interactions_by_type($R, $za, $zb, \%iary);
+            # print DOTFILE "\t\"$za\"->\"$zb\" [weight=$wg,penwidth=$wg];\n";
+                           # "\t\"$za\"->\"$zb\" [weight=$wg,penwidth=".$wg+1.",iphy=$wgs[0],igen=$wgs[1],iunk=$wgs[2]];\n";
+            printf SKLFILE "\t\"%s\"->\"%s\" [weight=%s,penwidth=%s,iphy=%d,igen=%d,iunk=%d];\n",
+                           $za, $zb, $wg, $wg+1, @wgs;
+            for (my $wi = 0; $wi < 3; $wi++) {
+                my $w = $wgs[$wi];
+                next unless $w > 0;
+                printf SKSFILE "\t\"%s\"->\"%s\" [weight=%s,penwidth=%s,color=\"%s\"];\n",
+                               $za, $zb, $w, $w, $EDGECOL[$wi];
+            };
+            print  DOXFILE &graphml_edge($idcount{"FULL"}{"EDGES"}{$za.$zb},
+                                         $idcount{"FULL"}{"NODES"}{$za},
+                                         $idcount{"FULL"}{"NODES"}{$zb},
+                                         $edgeCol, $wg, $iary);
+            print  SKXFILE &graphml_edge($idcount{"SKEL"}{"EDGES"}{$za.$zb},
+                                         $idcount{"SKEL"}{"NODES"}{$za},
+                                         $idcount{"SKEL"}{"NODES"}{$zb},
+                                         $edgeCol, $wg, $iary);
+            push @edges, &json_edge($idcount{"SKEL"}{"EDGES"}{$za.$zb},
+                                    $idcount{"SKEL"}{"NODES"}{$za},
+                                    $idcount{"SKEL"}{"NODES"}{$zb},
+                                    $edgeCol, $wg, $iary, $za, $zb);
+        };
+    };
+    
     push @T, (new Benchmark);
     print STDERR "##--> Looking for PATHS took ",&timing(\@T),"\n" if $_verbose{'RAW'};
 
@@ -1837,22 +2082,26 @@ sub compute_shortests_paths($$$$$$$) { # using Graph::Directed
 
     # Setting "not found" color for those DVgenes not connected
     foreach my $id (@NWIDS) {
-	(exists($fnd{$id})) || do {
-	    $STR = sprintf("\t\"%s\" [ color = \"%s\" ];\n", $id, $defcol);
-	    print DOTFILE $STR;
-	    print SKLFILE $STR;
-	    $idcount{"FULL"}{"NODES"}{$id} = $idcount{"FULL"}{"NNODE"}++;
-	    print DOXFILE &graphml_node($idcount{"FULL"}{"NODES"}{$id}, $id,
-					$defcol,
-					(exists($adesc->{$id}) ? $adesc->{$id} : undef));
-	    $idcount{"SKEL"}{"NODES"}{$id} = $idcount{"SKEL"}{"NNODE"}++;
-	    print SKXFILE &graphml_node($idcount{"SKEL"}{"NODES"}{$id}, $id,
-					$defcol,
-					(exists($adesc->{$id}) ? $adesc->{$id} : undef));
-	    push @nodes, &json_node($idcount{"SKEL"}{"NODES"}{$id}, $id, $defcol);
-	    $fnd{$id} = 0; # needed later
-	};
+        (exists($fnd{$id})) || do {
+            $STR = sprintf("\t\"%s\" [color=\"%s\"];\n", $id, $defcol);
+            print DOTFILE $STR;
+            print SKLFILE $STR;
+            print SKSFILE $STR;
+            $idcount{"FULL"}{"NODES"}{$id} = $idcount{"FULL"}{"NNODE"}++;
+            print DOXFILE &graphml_node($idcount{"FULL"}{"NODES"}{$id}, $id,
+                                        $defcol,
+                                        (exists($adesc->{$id}) ? $adesc->{$id} : undef),
+                                        $R->{$id}{'ALIASES'});
+            $idcount{"SKEL"}{"NODES"}{$id} = $idcount{"SKEL"}{"NNODE"}++;
+            print SKXFILE &graphml_node($idcount{"SKEL"}{"NODES"}{$id}, $id,
+                                        $defcol,
+                                        (exists($adesc->{$id}) ? $adesc->{$id} : undef),
+                                        $R->{$id}{'ALIASES'});
+            push @nodes, &json_node($idcount{"SKEL"}{"NODES"}{$id}, $id, $defcol);
+            $fnd{$id} = 0; # needed later
+        };
     };
+    
     print DOTFILE "}\n";
     print DOXFILE &graphml_trailer();
     print JSNFILE &json_trailer(\@nodes, \@edges);
@@ -1875,8 +2124,10 @@ sub compute_shortests_paths($$$$$$$) { # using Graph::Directed
     # };
 
     print SKLFILE "}\n";
+    print SKSFILE "}\n";
     print SKXFILE &graphml_trailer();
     close(SKLFILE);
+    close(SKSFILE);
     close(SKXFILE);
 
     undef %idcount;
@@ -1899,10 +2150,10 @@ sub compute_shortests_paths($$$$$$$) { # using Graph::Directed
     my $jstr = '';
     foreach my $k (@NWIDS) { # (keys %GNG) {
 
-	$jstr .= ($jstr ne q{} ? ",\n" : '') .
-	         (exists($GNG{$k})
-		  ? " \"$k\": [ " . join(", ", map { "\"$_\"" } keys %{ $GNG{$k} }) . " ]"
-		  : " \"$k\": [ ]");
+        $jstr .= ($jstr ne q{} ? ",\n" : '') .
+            (exists($GNG{$k})
+             ? " \"$k\": [ " . join(", ", map { "\"$_\"" } keys %{ $GNG{$k} }) . " ]"
+             : " \"$k\": [ ]");
 
     };
 
@@ -1910,7 +2161,7 @@ sub compute_shortests_paths($$$$$$$) { # using Graph::Directed
     print JFILE "\{\n$jstr\n\}\n";
     close(JFILE);
 
-    # Saving  skeleton in JASON format for the web browser
+    # Saving  skeleton in JSON format for the web browser
     print STDERR "##--> Saving SKEL in JSON...\n" if $_verbose{'RAW'};
     my $xfile = $fileprefix."_graph_web_skeleton.json";
 
@@ -1918,31 +2169,31 @@ sub compute_shortests_paths($$$$$$$) { # using Graph::Directed
     my %TGNG = ();
 
     foreach my $g (@NWIDS) {
-	exists($SKEL{$g}) || ($SKEL{$g}{'ADJLST'} = {});
+        exists($SKEL{$g}) || ($SKEL{$g}{'ADJLST'} = {});
     };
     foreach my $gA (keys %SKEL) {
-	exists($TGNG{$gA}) || ($TGNG{$gA} = { "C" => {}, "P" => {} });
-	foreach my $gB (keys %{ $SKEL{$gA}{'ADJLST'} }) {
-	    exists($TGNG{$gB}) || ($TGNG{$gB} = { "C" => {}, "P" => {} });
-	    $TGNG{$gA}{"C"}{$gB}++;
-	    $TGNG{$gB}{"P"}{$gA}++;
-	};
+        exists($TGNG{$gA}) || ($TGNG{$gA} = { "C" => {}, "P" => {} });
+        foreach my $gB (keys %{ $SKEL{$gA}{'ADJLST'} }) {
+            exists($TGNG{$gB}) || ($TGNG{$gB} = { "C" => {}, "P" => {} });
+            $TGNG{$gA}{"C"}{$gB}++;
+            $TGNG{$gB}{"P"}{$gA}++;
+        };
     };
 
     print STDERR Data::Dumper->Dump([ \%SKEL, \%TGNG ], [ qw( *SKEL *TGNG ) ]), "\n" if $_verbose{DEBUG};
 
     foreach my $g (keys %TGNG) {
-	my ($cc,$pc) = (scalar(keys %{ $TGNG{$g}{"C"} }), scalar(keys %{ $TGNG{$g}{"P"} }));
-	$jstr .= ($jstr ne q{} ? ",\n" : '') .
-	         # (exists($TGNG{$g})
-		 # ?
-                  &json_node_ext($g, $TGNG{$g}{"C"}, $TGNG{$g}{"P"},
-				   (exists($DVids->{$g})
-				    ? ($cc + $pc == 0 ? $defcol : $thycol)
-				    : $newcol),
-				   (exists($DVgns->{$g}{'FLG'}) && exists($DVgns->{$g}{'FLG'}[4])
-				    ? $DVgns->{$g}{'FLG'}[4] : 0));
-		  # : &json_node_ext($g, {}, {}, $defcol), 0);
+        my ($cc,$pc) = (scalar(keys %{ $TGNG{$g}{"C"} }), scalar(keys %{ $TGNG{$g}{"P"} }));
+        $jstr .= ($jstr ne q{} ? ",\n" : '') .
+            # (exists($TGNG{$g})
+            # ?
+            &json_node_ext($g, $TGNG{$g}{"C"}, $TGNG{$g}{"P"},
+                           (exists($DVids->{$g})
+                            ? ($cc + $pc == 0 ? $defcol : $thycol)
+                            : $newcol),
+                           (exists($DVgns->{$g}{'FLG'}) && exists($DVgns->{$g}{'FLG'}[4])
+                            ? $DVgns->{$g}{'FLG'}[4] : 0));
+        # : &json_node_ext($g, {}, {}, $defcol), 0);
     };
 
     open(EXTJSN, "> $xfile") || die("### ERROR ### Cannot open gene subnetworks file (JSON): $xfile\n");
@@ -1961,9 +2212,9 @@ sub compute_shortests_paths($$$$$$$) { # using Graph::Directed
     @$ids = @$sdi = @NWIDS;
     print STDERR "##\n##--> NODES SELECTED from SHORTEST PATH: ", scalar(@NWIDS), " of ", $lids, "\n",
                  "##--> NODES SELECTED ", sprintf("%dc/%dp/%dt", &count_nodes(\%SKEL)),
-                                  " of ", sprintf("%dc/%dp/%dt", &count_nodes($R)),
-                    " : EDGES SELECTED ", &count_edges(\%SKEL), " of ", &count_edges($R),"\n##\n"
-			if $_verbose{'RAW'};
+                 " of ", sprintf("%dc/%dp/%dt", &count_nodes($R)),
+                 " : EDGES SELECTED ", &count_edges(\%SKEL), " of ", &count_edges($R),"\n##\n"
+                     if $_verbose{'RAW'};
 
 } # compute_shortests_paths
 
@@ -1972,16 +2223,16 @@ sub count_nodes($) {
     # my %U = ();
     my ($p, $c) = (0, 0);
     foreach my $g (keys %$G) {
-	$G->{$g}{'CHILDnum'} = scalar( keys %{ $G->{$g}{'ADJLST'} } ); # update CHILDnum at the same time
-	if ($G->{$g}{'CHILDnum'} > 0) {
-	    $p++;
-	} else {
-	    $c++;
-	};
-	# exists($U{$g}) || ($U{$g} = ++$p);
-	# foreach my $j (keys %{ $G->{$g}{'ADJLST'} }) {
-	#     exists($U{$j}) || ($U{$j} = ++$c);
-	# };
+        $G->{$g}{'CHILDnum'} = scalar( keys %{ $G->{$g}{'ADJLST'} } ); # update CHILDnum at the same time
+        if ($G->{$g}{'CHILDnum'} > 0) {
+            $p++;
+        } else {
+            $c++;
+        };
+        # exists($U{$g}) || ($U{$g} = ++$p);
+        # foreach my $j (keys %{ $G->{$g}{'ADJLST'} }) {
+        #     exists($U{$j}) || ($U{$j} = ++$c);
+        # };
     };
     # undef %U;
     return $c, $p, $c + $p;
@@ -1991,9 +2242,9 @@ sub count_edges($) {
     my $G = shift;
     my $c = 0;
     foreach my $g (keys %$G) {
-	$G->{$g}{'CHILDnum'} = scalar( keys %{ $G->{$g}{'ADJLST'} } ); # update CHILDnum at the same time
-	$c += $G->{$g}{'CHILDnum'};
-	# $c += scalar( keys %{ $G->{$g}{'ADJLST'} } );
+        $G->{$g}{'CHILDnum'} = scalar( keys %{ $G->{$g}{'ADJLST'} } ); # update CHILDnum at the same time
+        $c += $G->{$g}{'CHILDnum'};
+        # $c += scalar( keys %{ $G->{$g}{'ADJLST'} } );
     };
     return $c;
 } # count_edges
@@ -2005,12 +2256,12 @@ sub unalias_graph_ids($$$$$) {
     print STDERR "### UNALIASING GRAPH GENE IDS...\n" if $_verbose{'RAW'};
 
     printf STDERR "#--> UNALIAS GRAPH (PRE):  %d Child  %d Parent  %d Total NODES  %d EDGES\n".
-                  "#--> UNALIAS HPARG (PRE):  %d Child  %d Parent  %d Total NODES  %d EDGES\n".
-                  "#--> UNALIAS DVgenes (PRE):  %d GENE IDs\n",
-	          &count_nodes($graph), &count_edges($graph),
-	          &count_nodes($hparg), &count_edges($hparg),
-	          scalar(keys %$rpgns)
-		  if $_verbose{'RAW'};
+        "#--> UNALIAS HPARG (PRE):  %d Child  %d Parent  %d Total NODES  %d EDGES\n".
+        "#--> UNALIAS DVgenes (PRE):  %d GENE IDs\n",
+        &count_nodes($graph), &count_edges($graph),
+        &count_nodes($hparg), &count_edges($hparg),
+        scalar(keys %$rpgns)
+        if $_verbose{'RAW'};
     print STDERR join(" :: ", (keys %$rpgns)), "\n" if $_verbose{'RAW'};
 
     my %saila = ();
@@ -2018,152 +2269,218 @@ sub unalias_graph_ids($$$$$) {
     # reverse alias hash first
     print STDERR "#-> Reversing alias hash...\n" if $_verbose{'RAW'};
     foreach my $pid (keys %$alias) {
+        $saila{$pid} = $pid;
         foreach my $sid (keys %{ $alias->{$pid} }) { ## removed because %unalias
-    	## my $sid = $alias->{$pid};
+            ## my $sid = $alias->{$pid};
     	    next if $pid eq $sid;
     	    # exists($alias->{$sid}) && do {
     	    (exists($adesc->{$sid}) || exists($alias->{$sid})) && do {
-    		# avoid cross referencing genes that may have an equivalent synonim ?
-    		# ISSUE: how to avoid different genes having the same synonim ?
-    		# CURRENT SOLUTION: remove putative misleading synonims... (see next line)
-    		# ensure it does not appears also on the alias table we produce
-    	     ## delete($alias->{$pid}); ## {$sid});
-    		next;
+                # avoid cross referencing genes that may have an equivalent synonim ?
+                # ISSUE: how to avoid different genes having the same synonim ?
+                # CURRENT SOLUTION: remove putative misleading synonims... (see next line)
+                # ensure it does not appears also on the alias table we produce
+                ## delete($alias->{$pid}); ## {$sid});
+                next;
     	    };
-  	 ## exists($saila{$sid}) || ($saila{$sid} = {});
-         ## exists($saila{$sid}{$pid}) || ($saila{$sid}{$pid} = 0);
-    	 ## $saila{$sid}{$pid}++;
-	    $saila{$sid} = $pid;
+            ## exists($saila{$sid}) || ($saila{$sid} = {});
+            ## exists($saila{$sid}{$pid}) || ($saila{$sid}{$pid} = 0);
+            ## $saila{$sid}{$pid}++;
+            $saila{$sid} = $pid;
     	};
     };
 
     # fixing childs ids
-    foreach my $pid (keys %{ $graph }) {
-	foreach my $kid (keys %{ $graph->{$pid}{'ADJLST'} }) {
-	    exists($saila{$kid}) && do {
-		my $aid = $saila{$kid};
-		$aid eq $kid && next;
-		exists($graph->{$pid}{'ADJLST'}{$aid}) || do {
-		    $graph->{$pid}{'ADJLST'}{$aid} = $graph->{$pid}{'ADJLST'}{$kid};
-		    delete($graph->{$pid}{'ADJLST'}{$kid});
-		    next;
-		};
-		# both keys already exists
-		foreach my $lbl (keys %{ $graph->{$pid}{'ADJLST'}{$aid} }) {
-		    if (exists($graph->{$pid}{'ADJLST'}{$kid}{$lbl})) {
-			$graph->{$pid}{'ADJLST'}{$aid}{$lbl}[0] += shift @{ $graph->{$pid}{'ADJLST'}{$kid}{$lbl} };
-			push @{ $graph->{$pid}{'ADJLST'}{$aid}{$lbl} }, @{ $graph->{$pid}{'ADJLST'}{$kid}{$lbl} };
-		    } else {
-			$graph->{$pid}{'ADJLST'}{$aid}{$lbl} = $graph->{$pid}{'ADJLST'}{$kid}{$lbl};
-		    };
-		    delete($graph->{$pid}{'ADJLST'}{$kid}{$lbl});
-		};
-	    };
-	};
+    my (@Tary, @tary);
+    @Tary = keys %{ $graph };
+    foreach my $pid (@tary) {
+        @tary = keys %{ $graph->{$pid}{'ADJLST'} };
+        foreach my $kid (@tary) {
+            exists($saila{$kid}) && do {
+                my $aid = $saila{$kid};
+                $aid eq $kid && next;
+                exists($graph->{$pid}{'ADJLST'}{$aid}) || do {
+                    $graph->{$pid}{'ADJLST'}{$aid} = $graph->{$pid}{'ADJLST'}{$kid};
+                    delete($graph->{$pid}{'ADJLST'}{$kid});
+                    next;
+                };
+                # both keys already exists
+                foreach my $lbl (keys %{ $graph->{$pid}{'ADJLST'}{$aid} }) {
+                    if (exists($graph->{$pid}{'ADJLST'}{$kid}{$lbl})) {
+                        $graph->{$pid}{'ADJLST'}{$aid}{$lbl}[0] += shift @{ $graph->{$pid}{'ADJLST'}{$kid}{$lbl} };
+                        push @{ $graph->{$pid}{'ADJLST'}{$aid}{$lbl} }, @{ $graph->{$pid}{'ADJLST'}{$kid}{$lbl} };
+                    } else {
+                        $graph->{$pid}{'ADJLST'}{$aid}{$lbl} = $graph->{$pid}{'ADJLST'}{$kid}{$lbl};
+                    };
+                    delete($graph->{$pid}{'ADJLST'}{$kid}{$lbl});
+                };
+                delete($graph->{$pid}{'ADJLST'}{$kid});
+            };
+        };
     };
-    foreach my $pid (keys %{ $hparg }) {
-	foreach my $kid (keys %{ $hparg->{$pid}{'ADJLST'} }) {
-	    exists($saila{$kid}) && do {
-		my $aid = $saila{$kid};
-		$aid eq $kid && next;
-		exists($hparg->{$pid}{'ADJLST'}{$aid}) || do {
-		    $hparg->{$pid}{'ADJLST'}{$aid} = $hparg->{$pid}{'ADJLST'}{$kid};
-		    delete($hparg->{$pid}{'ADJLST'}{$kid});
-		    next;
-		};
-		# both keys already exists
-		foreach my $lbl (keys %{ $hparg->{$pid}{'ADJLST'}{$aid} }) {
-		    if (exists($hparg->{$pid}{'ADJLST'}{$kid}{$lbl})) {
-			$hparg->{$pid}{'ADJLST'}{$aid}{$lbl}[0] += shift @{ $hparg->{$pid}{'ADJLST'}{$kid}{$lbl} };
-			push @{ $hparg->{$pid}{'ADJLST'}{$aid}{$lbl} }, @{ $hparg->{$pid}{'ADJLST'}{$kid}{$lbl} };
-		    } else {
-			$hparg->{$pid}{'ADJLST'}{$aid}{$lbl} = $hparg->{$pid}{'ADJLST'}{$kid}{$lbl};
-		    };
-		    delete($hparg->{$pid}{'ADJLST'}{$kid}{$lbl});
-		};
-	    };
-	};
-    };
+    # # fixing childs ids for inverse graph
+    # foreach my $pid (keys %{ $hparg }) {
+    #     foreach my $kid (keys %{ $hparg->{$pid}{'ADJLST'} }) {
+    #         exists($saila{$kid}) && do {
+    #             my $aid = $saila{$kid};
+    #             $aid eq $kid && next;
+    #             exists($hparg->{$pid}{'ADJLST'}{$aid}) || do {
+    #                 $hparg->{$pid}{'ADJLST'}{$aid} = $hparg->{$pid}{'ADJLST'}{$kid};
+    #                 delete($hparg->{$pid}{'ADJLST'}{$kid});
+    #                 next;
+    #             };
+    #             # both keys already exists
+    #             foreach my $lbl (keys %{ $hparg->{$pid}{'ADJLST'}{$aid} }) {
+    #                 if (exists($hparg->{$pid}{'ADJLST'}{$kid}{$lbl})) {
+    #                     $hparg->{$pid}{'ADJLST'}{$aid}{$lbl}[0] += shift @{ $hparg->{$pid}{'ADJLST'}{$kid}{$lbl} };
+    #                     push @{ $hparg->{$pid}{'ADJLST'}{$aid}{$lbl} }, @{ $hparg->{$pid}{'ADJLST'}{$kid}{$lbl} };
+    #                 } else {
+    #                     $hparg->{$pid}{'ADJLST'}{$aid}{$lbl} = $hparg->{$pid}{'ADJLST'}{$kid}{$lbl};
+    #                 };
+    #                 delete($hparg->{$pid}{'ADJLST'}{$kid}{$lbl});
+    #             };
+    #             delete($hparg->{$pid}{'ADJLST'}{$kid});
+    #         };
+    #     };
+    # };
 
     # now fix any aliased parents ids on the graph hashes
     print STDERR "#-> Unaliasing graph keys...\n" if $_verbose{'RAW'};
     foreach my $pid (keys %saila) {
-    ## foreach my $pid (keys %$alias) {
-	## foreach my $sid (keys %{ $saila{$pid} }) {
-	my $sid = $saila{$pid};
-
-	# fixing driver ids as they can be aliases
-	    exists($rpgns->{$pid}) && do {
-		# if (exists($rpgns->{$sid})) { # keep $sid as standard gene id and append $pid data
-		# } else { # rename $pid to $sid and keep its data
-		exists($rpgns->{$sid}) || do {
-		    $rpgns->{$sid} = $rpgns->{$pid};
-		};
-		delete($rpgns->{$pid});
-	    };
-	# unaliasing graph
+        ## foreach my $pid (keys %$alias) {
+        ## foreach my $sid (keys %{ $saila{$pid} }) {
+        my $sid = $saila{$pid};
 	    next if $pid eq $sid;
+        # fixing driver ids as they can be aliases
+	    exists($rpgns->{$pid}) && do {
+            # if (exists($rpgns->{$sid})) { # keep $sid as standard gene id and append $pid data
+            # } else { # rename $pid to $sid and keep its data
+            exists($rpgns->{$sid}) || do {
+                $rpgns->{$sid} = $rpgns->{$pid};
+            };
+            delete($rpgns->{$pid});
+	    };
+        # unaliasing graph
 	    exists($graph->{$pid}) && do {
-		if (exists($graph->{$sid})) { # keep $sid as standard gene id and append $pid data
-		    foreach my $kid (keys %{ $graph->{$pid}{'ADJLST'} }) {
-			if (exists($graph->{$sid}{'ADJLST'}{$kid})) {
-			    foreach my $lbl (keys %{ $graph->{$pid}{'ADJLST'}{$kid} }) {
-				if (exists($graph->{$sid}{'ADJLST'}{$kid}{$lbl})) {
-				    $graph->{$sid}{'ADJLST'}{$kid}{$lbl}[0] += shift @{ $graph->{$pid}{'ADJLST'}{$kid}{$lbl} };
-				    push @{ $graph->{$sid}{'ADJLST'}{$kid}{$lbl} }, @{ $graph->{$pid}{'ADJLST'}{$kid}{$lbl} };
-				} else {
-				    $graph->{$sid}{'ADJLST'}{$kid}{$lbl} = $graph->{$pid}{'ADJLST'}{$kid}{$lbl};
-				};
-				delete($graph->{$pid}{'ADJLST'}{$kid}{$lbl});
-			    };
-			} else {
-			    $graph->{$sid}{'ADJLST'}{$kid} = $graph->{$pid}{'ADJLST'}{$kid};
-			};
-			delete($graph->{$pid}{'ADJLST'}{$kid});
-		    };
-		} else { # rename $pid to $sid and keep its data
-		    $graph->{$sid} = $graph->{$pid};
-		};
-		delete($graph->{$pid});
+            if (exists($graph->{$sid})) { # keep $sid as standard gene id and append $pid data
+                @tary = keys %{ $graph->{$pid}{'ADJLST'} };
+                foreach my $kid (@tary) {
+                    if (exists($graph->{$sid}{'ADJLST'}{$kid})) {
+                        foreach my $lbl (keys %{ $graph->{$pid}{'ADJLST'}{$kid} }) {
+                            if (exists($graph->{$sid}{'ADJLST'}{$kid}{$lbl})) {
+                                $graph->{$sid}{'ADJLST'}{$kid}{$lbl}[0] += shift @{ $graph->{$pid}{'ADJLST'}{$kid}{$lbl} };
+                                push @{ $graph->{$sid}{'ADJLST'}{$kid}{$lbl} }, @{ $graph->{$pid}{'ADJLST'}{$kid}{$lbl} };
+                            } else {
+                                $graph->{$sid}{'ADJLST'}{$kid}{$lbl} = $graph->{$pid}{'ADJLST'}{$kid}{$lbl};
+                            };
+                            delete($graph->{$pid}{'ADJLST'}{$kid}{$lbl});
+                        };
+                    } else {
+                        $graph->{$sid}{'ADJLST'}{$kid} = $graph->{$pid}{'ADJLST'}{$kid};
+                    };
+                    delete($graph->{$pid}{'ADJLST'}{$kid});
+                };
+            } else { # rename $pid to $sid and keep its data
+                $graph->{$sid} = $graph->{$pid};
+            };
+            delete($graph->{$pid});
 	    };
-	# unaliasing inverse graph
-	    exists($hparg->{$pid}) && do {
-		if (exists($hparg->{$sid})) { # keep $sid as standard gene id and append $pid data
-		    foreach my $kid (keys %{ $hparg->{$pid}{'ADJLST'} }) {
-			if (exists($hparg->{$sid}{'ADJLST'}{$kid})) {
-			    foreach my $lbl (keys %{ $hparg->{$pid}{'ADJLST'}{$kid} }) {
-				if (exists($hparg->{$sid}{'ADJLST'}{$kid}{$lbl})) {
-				    $hparg->{$sid}{'ADJLST'}{$kid}{$lbl}[0] += shift @{ $hparg->{$pid}{'ADJLST'}{$kid}{$lbl} };
-				    push @{ $hparg->{$sid}{'ADJLST'}{$kid}{$lbl} }, @{ $hparg->{$pid}{'ADJLST'}{$kid}{$lbl} };
-				} else {
-				    $hparg->{$sid}{'ADJLST'}{$kid}{$lbl} = $hparg->{$pid}{'ADJLST'}{$kid}{$lbl};
-				};
-				delete($hparg->{$pid}{'ADJLST'}{$kid}{$lbl});
-			    };
-			} else {
-			    $hparg->{$sid}{'ADJLST'}{$kid} = $hparg->{$pid}{'ADJLST'}{$kid};
-			};
-			delete($hparg->{$pid}{'ADJLST'}{$kid});
-		    };
-		} else { # rename $pid to $sid and keep its data
-		    $hparg->{$sid} = $hparg->{$pid};
-		};
-		delete($hparg->{$pid});
-	    };
-	## };
+        # # unaliasing inverse graph
+	    # exists($hparg->{$pid}) && do {
+        #     if (exists($hparg->{$sid})) { # keep $sid as standard gene id and append $pid data
+        #         foreach my $kid (keys %{ $hparg->{$pid}{'ADJLST'} }) {
+        #             if (exists($hparg->{$sid}{'ADJLST'}{$kid})) {
+        #                 foreach my $lbl (keys %{ $hparg->{$pid}{'ADJLST'}{$kid} }) {
+        #                     if (exists($hparg->{$sid}{'ADJLST'}{$kid}{$lbl})) {
+        #                         $hparg->{$sid}{'ADJLST'}{$kid}{$lbl}[0] += shift @{ $hparg->{$pid}{'ADJLST'}{$kid}{$lbl} };
+        #                         push @{ $hparg->{$sid}{'ADJLST'}{$kid}{$lbl} }, @{ $hparg->{$pid}{'ADJLST'}{$kid}{$lbl} };
+        #                     } else {
+        #                         $hparg->{$sid}{'ADJLST'}{$kid}{$lbl} = $hparg->{$pid}{'ADJLST'}{$kid}{$lbl};
+        #                     };
+        #                     delete($hparg->{$pid}{'ADJLST'}{$kid}{$lbl});
+        #                 };
+        #             } else {
+        #                 $hparg->{$sid}{'ADJLST'}{$kid} = $hparg->{$pid}{'ADJLST'}{$kid};
+        #             };
+        #             delete($hparg->{$pid}{'ADJLST'}{$kid});
+        #         };
+        #     } else { # rename $pid to $sid and keep its data
+        #         $hparg->{$sid} = $hparg->{$pid};
+        #     };
+        #     delete($hparg->{$pid});
+	    # };
+        ## };
+    };
+    # adding alias list to graph nodes
+    foreach my $pid (keys %{ $graph }) {
+        $graph->{$pid}{'ALIASES'} = [ keys %{ $alias->{$pid} } ];
+        my $nchlds = scalar ( keys %{ $graph->{$pid}{'ADJLST'} } );
+        $graph->{$pid}{'CHILDnum'} = $nchlds;
     };
 
+    %$hparg = ();
+    foreach my $pid (keys %{ $graph }) {
+        foreach my $kid (keys %{ $graph->{$pid}{'ADJLST'} }) {
+            $hparg->{$kid}{'ADJLST'}{$pid} = $graph->{$pid}{'ADJLST'}{$kid};
+        };
+    };
+    foreach my $pid (keys %{ $hparg }) {
+        my $nchlds = scalar ( keys %{ $hparg->{$pid}{'ADJLST'} } );
+        $hparg->{$pid}{'CHILDnum'} = $nchlds;
+    };
+   
     printf STDERR "#--> UNALIAS GRAPH (POST):  %d Child  %d Parent  %d Total NODES  %d EDGES\n".
-                  "#--> UNALIAS HPARG (POST):  %d Child  %d Parent  %d Total NODES  %d EDGES\n".
-                  "#--> UNALIAS DVgenes (POST):  %d GENE IDs\n",
-	          &count_nodes($graph), &count_edges($graph),
-	          &count_nodes($hparg), &count_edges($hparg),
-	          scalar(keys %$rpgns)
-		  if $_verbose{'RAW'};
+        "#--> UNALIAS HPARG (POST):  %d Child  %d Parent  %d Total NODES  %d EDGES\n".
+        "#--> UNALIAS DVgenes (POST):  %d GENE IDs\n",
+        &count_nodes($graph), &count_edges($graph),
+        &count_nodes($hparg), &count_edges($hparg),
+        scalar(keys %$rpgns)
+        if $_verbose{'RAW'};
     print STDERR join(" :: ", (keys %$rpgns)), "\n" if $_verbose{'RAW'};
 
     print STDERR "### UNALIASING GRAPH GENE IDS DONE.\n" if $_verbose{'RAW'};
 
-    print STDERR Data::Dumper->Dump([ $graph ], [ qw( *GRAPH ) ]),"\n" if $DEBUG;
+    print STDERR "### GRAPH STRUCTURE:\n",
+                 Data::Dumper->Dump([ $graph ], [ qw( *GRAPH ) ]),"\n" if $DEBUG;
+    print STDERR "### HPARG STRUCTURE:\n",
+                 Data::Dumper->Dump([ $hparg ], [ qw( *HPARG ) ]),"\n" if $DEBUG;
 
 } # unalias_graph_ids
+
+sub count_interactions_by_type($$$) {
+    my ($G, $A, $B) = @_;
+    my ($tot, $phy, $gen, $unk) = (0) x 4;
+    # my $flg = defined($R) ? 1 : 0;
+    my %R = ('P' => [], 'G' => [], 'U' => []); # if $flg
+    exists($G->{$A}{'ADJLST'}{$B}) && do {
+        my $rf = $G->{$A}{'ADJLST'}{$B};
+        foreach my $ie (keys %$rf) {
+            my ($T, $C, %h, @t);
+            $T = substr($ie,1,1);
+            next unless defined($rf->{$ie});
+            $C = 0; %h = ();
+            $rf->{$ie}[0] > 0 && do {
+                @t = @{ $rf->{$ie} };
+                shift @t;
+                foreach my $co (@t) { # making evidences unique!!!
+                    my $CO = $ie.' '.$co;
+                    $h{$CO}++;
+                    $C++ if $h{$CO} == 1;
+                };
+            };
+            push @{ $R{$T} }, keys %h if $C > 0;
+          THYSUM: {
+              $T eq 'P' && ($phy += $C, last THYSUM); # $rf->{$ie}[0]
+              $T eq 'G' && ($gen += $C, last THYSUM); # $rf->{$ie}[0]
+              $T eq 'U' && ($unk += $C, last THYSUM); # $rf->{$ie}[0]
+            }; # THYSUM
+        };
+        $tot = $phy + $gen + $unk;
+    };
+    # $flg && do
+    unshift @{ $R{'P'} }, $phy;
+    unshift @{ $R{'G'} }, $gen;
+    unshift @{ $R{'U'} }, $unk;
+    $G->{$A}{'ADJLST'}{$B} = { 'T' => $tot, %R };
+    return ($tot, $phy, $gen, $unk); # total + 1, phy, gen, unk
+    
+} # count_interactions_by_type
