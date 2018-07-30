@@ -61,7 +61,7 @@ def read_config(cfile):
     	"project_name", "output", "neo4j_memory","neo4j_address",
     	"biogrid_file","string_file","ppaxe_file",
     	"drivers_file","alias_file","web_address",
-    	"content_templates","logo_img"
+    	"content_templates","logo_img", "databases"
     ])
     opts = dict()
     try:
@@ -83,6 +83,7 @@ def read_config(cfile):
     		netengine_error(msg, fatal=False)
     		continue
     	opts[opt] = value
+    print(opts)
     return opts
 
 
@@ -94,7 +95,7 @@ def print_opts(opts):
 	    "project_name","output", "neo4j_memory","neo4j_address",
 	    "biogrid_file","string_file","ppaxe_file",
 	    "drivers_file","alias_file","web_address",
-	    "content_templates","logo_img"
+	    "content_templates","logo_img", "databases"
     ]
     sys.stderr.write("    OPTIONS:\n")
     for opt in valid_options:
@@ -141,16 +142,16 @@ def check_opts(opts):
     if 'drivers_file' not in opts:
     	msg = "Drivers file required!"
     	netengine_error(msg, fatal=True)
-        
+
     filenames = [ opts[filename] for filename in opts.keys() if filename.find("_file") > 0 ]
-    check_files(filenames)
+    #check_files(filenames)
 
 
 def create_dirs(opts):
     '''
     Creates all output directories
     '''
-    directories = ['plots', 'graphs', 'tables', 'django-project', 'logs']
+    directories = ['plots', 'graphs', 'tables', 'django-project', 'logs', 'databases']
     for direct in directories:
         try:
             os.mkdir(os.path.join(opts['output'], direct))
@@ -179,6 +180,19 @@ def build_graph(opts):
     #call([ filter_interactions, '-h' ])
 
 
+def download_interactions(opts):
+    '''
+    Takes options and downloads interaction files from 'databases'.
+    os.path.join(opts['output'], 'databases)'
+    '''
+    # Check databases 
+    # Download database 1
+        # call('wget webpage')
+    # Download database 2
+    # 
+
+
+
 def main():
     cmdopts = get_options()
     print_start()
@@ -188,6 +202,7 @@ def main():
     opts['bin'] = os.path.join(opts['base_dir'], 'bin')
     opts['data'] = os.path.join(opts['base_dir'], 'data')
     check_opts(opts)
+    download_interactions(opts)
     print_opts(opts)
     create_dirs(opts)
     build_graph(opts)
