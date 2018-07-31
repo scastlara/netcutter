@@ -389,6 +389,7 @@ sub read_hgnc_aliases_table($$$$) {
           };
 
           # $dat =~ s/;(\[(?:AC|PR|SY)\])/;\t$1/; # fix required as sometimes subfields are composite
+          next unless $dat;
           @dat = split /;/o, $dat;
           %hdat = ();
           foreach my $d (@dat) {
@@ -936,6 +937,9 @@ sub read_interactions_table_biogrid($$$$$$$) {
          undef, $pmid, $specA, $specB, undef, $score, undef) = split /\t/o, $_, 20;
 
         # Check for human (sp_code=9606) and specA==specB (both prot/genes from the same species)
+        if (not $specB) {
+          die "$_\n";
+        }
         next if ($specA != $specB || $specA != 9606);
 
         print STDERR "### $gidA($aliasA) vs $gidB($aliasB) $expersys $expertype $specA==$specB\n" if $DEBUG;
