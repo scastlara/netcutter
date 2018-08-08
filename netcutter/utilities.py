@@ -23,6 +23,15 @@ def get_time():
     '''    
     return datetime.datetime.now().strftime("%a, %d %B %Y %H:%M:%S")
 
+def get_time():
+    '''
+    Args:
+        None
+
+    Returns:
+        Returns time in a useful format
+    '''    
+    return datetime.datetime.now().strftime("%a, %d %B %Y %H:%M:%S")
 
 def print_start():
     '''

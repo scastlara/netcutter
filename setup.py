@@ -7,10 +7,10 @@ setuptools.setup(name='netcutter',
       author='S. Castillo-Lara, R. Arenas, J.F. Abril',
       author_email='s.cast.lara@gmail.com',
       license='GPL-3.0',
-      scripts=['bin/netcutter'],
+      scripts=['bin/netcutter', 'bin/filter_interactions_to_graph.pl', 'bin/edge2neo4jcsv.pl', 'bin/node2neo4jcsv.pl'],
       include_package_data=True,
       packages=setuptools.find_packages(),
-      package_data = { 
-            'netcutter' : ['bin/*.pl']},
+      #package_data = { 
+      #      'netcutter' : ['']},
       zip_safe=False)
 

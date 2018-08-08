@@ -2,6 +2,14 @@
 # JOBS FOR NETCUTTER
 # ---------------------------------------------------------------- #
 from functools import wraps
+import sys
+import os
+from subprocess import call
+import re
+from functools import wraps
+from netcutter import utilities
+import pkg_resources
+
 
 
 def job(job_name):
@@ -36,16 +44,16 @@ def create_dirs(opts):
         try:
             os.mkdir(os.path.join(opts['output'], direct))
         except OSError as err:
-            netengine_error(str(err), fatal=False)
+            utilities.netengine_error(str(err), fatal=False)
 
 def print_job(name, done=False):
     if done is False:
         sys.stderr.write("\n# ---------------------------------------- #\n")
         sys.stderr.write("# JOB: %s\n" % name.upper())
         sys.stderr.write("# ---------------------------------------- #\n")
-        sys.stderr.write("\n     - Starting job: %s \n" % get_time())
+        sys.stderr.write("\n     - Starting job: %s \n" % utilities.get_time())
     else:
-        sys.stderr.write("\n     - Finished: %s \n\n" % get_time())
+        sys.stderr.write("\n     - Finished: %s \n\n" % utilities.get_time())
 
 
 @job("Build graph")
@@ -61,7 +69,7 @@ def build_graph(opts):
 
     '''
     cmd = list()
-    cmd.append(opts['bin'] + '/' + 'filter_interactions_to_graph.pl')
+    cmd.append('filter_interactions_to_graph.pl')
     drivers_type = 'ids'
     if opts['drivers_ext'] is True:
         drivers_type = 'ext'
@@ -91,7 +99,7 @@ def edges_2_csv(opts):
 
     '''
     cmd = list()
-    cmd.append(os.path.join(opts['bin'], 'edge2neo4jcsv.pl'))
+    cmd.append('edge2neo4jcsv.pl')
     cmd.append('-wholegraph')
     cmd.append(os.path.join(opts['output'], 'graphs', 'graphs_wholegraph.dot'))
     cmd.append('-alias')
@@ -121,7 +129,7 @@ def nodes_2_csv(opts):
 
     '''
     cmd = list()
-    cmd.append(os.path.join(opts['bin'], 'node2neo4jcsv.pl'))
+    cmd.append('node2neo4jcsv.pl')
     cmd.append('-wholegraph')
     cmd.append(os.path.join(opts['output'], 'graphs', 'graphs_wholegraph.dot'))
     cmd.append('-alias')
