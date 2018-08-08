@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl
+#!/usr/bin/perl
 #
 =head1 NAME
 
@@ -338,20 +338,21 @@ sub filter_json {
               $data->{$interaction}{"biogrid"}++;
               my($P, $type, $source, $score, $PMID);
               ($P, $type, $source, $score, $PMID, undef) = split /\s/, $_;
-              push($data->{$interaction}{"biogrid_pubmedid"},
-                   json_cleaner($PMID));
+              if ($PMID) {
+                  push(@{ $data->{$interaction}{"biogrid_pubmedid"} }, json_cleaner($PMID));
+              }
             }
             if (m/STRING/) {
               $data->{$interaction}{"string"}++;
               my($P, $source, $score, $type, @evidence) = split /\s/, $_;
-              push($data->{$interaction}{"string_score"},
+              push(@{ $data->{$interaction}{"string_score"} },
                    json_cleaner($score));
               foreach (@evidence) {
                 if (m/PMID/) {
-                  push($data->{$interaction}{"string_pubmedid"},
+                  push(@{ $data->{$interaction}{"string_pubmedid"} },
                        PMID_cleaner($_));
                 } else {
-                  push($data->{$interaction}{"string_evidence"},
+                  push(@{ $data->{$interaction}{"string_evidence"} },
                        string_cleaner($_));
                 }
               }
@@ -365,7 +366,7 @@ sub filter_json {
               $data->{$interaction}{"biogrid"}++;
               my($G, $type, $source, $score, $PMID, undef
                  ) = split /\s/, $_;
-              push($data->{$interaction}{"biogrid_pubmedid"},
+              push(@{ $data->{$interaction}{"biogrid_pubmedid"} },
                    json_cleaner($PMID));
             }
           }
@@ -378,14 +379,14 @@ sub filter_json {
               $data->{$interaction}{"biogrid"}++;
               my($U, $type, $source, $score, $PMID, undef
                  ) = split /\s/, $_;
-              push($data->{$interaction}{"biogrid_pubmedid"}, $PMID);
+              push(@{ $data->{$interaction}{"biogrid_pubmedid"} }, $PMID);
             }
             if (m/PPaxe/) {
               $data->{$interaction}{"ppaxe"}++;
               my($U, $source, $score, $PMID, undef) = split /\s/, $_;
-              push($data->{$interaction}{"ppaxe_score"},
+              push(@{ $data->{$interaction}{"ppaxe_score"} },
                    gene_cleaner($score));
-              push($data->{$interaction}{"ppaxe_pubmedid"},
+              push(@{ $data->{$interaction}{"ppaxe_pubmedid"} },
                    gene_cleaner($PMID));
             }
           }
@@ -441,10 +442,22 @@ sub print_csv {
     }
     print $fh "$gene1", ";", "$gene2";
     foreach my $attribute (qw(level strenth genetic_interaction
-                              physical_interaction unknown_interaction
-                              biogrid biogrid_pubmedid string
+                              physical_interaction unknown_interaction biogrid biogrid_pubmedid string
                               ppaxe ppaxe_score ppaxe_pubmedid)) {
-      print $fh ";$data->{$interaction}{$attribute}";
+
+      if (ref($data->{$interaction}{$attribute}) eq 'ARRAY') {
+        if (not scalar(@{ $data->{$interaction}{$attribute}})) {
+          print $fh ";NA";
+        } else {
+            print $fh ";", join(",", @{ $data->{$interaction}{$attribute}});
+        }
+      } else {
+        if (not $data->{$interaction}{$attribute}) {
+          print $fh ";NA";
+        } else {
+          print $fh ";$data->{$interaction}{$attribute}";
+        }
+      }
     }
     print $fh "\n";
   }
@@ -511,7 +524,7 @@ my $data = init_graph($options{'wholegraph'},
                       $options{'verbose'});
 get_level($options{'prefix'}, $options{'maxlvl'}, $data, $options{'verbose'});
 filter_json($options{'json'}, $data, $options{'verbose'});
-print STDERR Dumper(\$data);
+#print STDERR Dumper(\$data);
 print_csv($data, $options{'output'}, $options{'verbose'});
 #print_short_csv($data, $options{'output'}, $options{'verbose'});
 

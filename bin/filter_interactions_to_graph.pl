@@ -1894,10 +1894,10 @@ sub compute_shortests_paths($$$$$$$) { # using Graph::Directed
     my ($thycol, $defcol, $newcol, $edgecol) = ('#CBB0F0', '#F1A111', '#CCCCCC', '#000000'); # purple-lvl0 / orange / lightgrey
     my $ofile = $fileprefix."_graph_allpaths.dot";
     my $oXfile = $fileprefix."_graph_allpaths.graphml";
-    my $dfile = $fileprefix."_graph_skeleton.dot";
-    my $Dfile = $fileprefix."_graph_skeleton_split.dot";
-    my $dXfile = $fileprefix."_graph_skeleton.graphml";
-    my $dJfile = $fileprefix."_graph_skeleton.json"; # level 0
+    my $dfile = $fileprefix."_graph_lvl+0.dot";
+    my $Dfile = $fileprefix."_graph_lvl+0_split.dot";
+    my $dXfile = $fileprefix."_graph_lvl+0.graphml";
+    my $dJfile = $fileprefix."_graph_lvl+0.json"; # level 0
     # EXTJSN fileprefix_graph_web_skeleton.json is computed at the end
 
     open(DOTFILE, "> $ofile") || die("### ERROR ### Cannot open dot(allpaths) file: $ofile\n");

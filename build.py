@@ -6,6 +6,23 @@ from subprocess import call
 import re
 from os import access, R_OK
 from os.path import isfile
+from functools import wraps
+
+
+
+def job(job_name):
+    '''
+    Decorator for jobs.
+    Add @job('JOB-NAME') to a function to make it a job
+    '''
+    def job_decorator(func):
+        @wraps(func)
+        def wrapped_function(*args, **kwargs):
+            print_job(job_name, done=False)
+            func(*args, **kwargs)
+            print_job(job_name, done=True)
+        return wrapped_function
+    return job_decorator
 
 
 def get_time():
@@ -75,13 +92,13 @@ def netengine_error(msg, fatal=True):
         None
 
     '''
-    msg_header = "\n\n# NETENGINE ERROR\n"
+    msg_header = "\n\n\t# NETENGINE ERROR\n"
     if fatal is True:
-    	msg_header += "# [ FATAL ]\n"
-    	sys.exit(msg_header + "# " + msg +  "\n")
+    	msg_header += "\t# [ FATAL ]\n"
+    	sys.exit(msg_header + "\t# " + msg +  "\n")
     else:
-    	msg_header += "# [ WARNING ]\n"
-    	sys.stderr.write(msg_header + "# " + msg +  "\n")
+    	msg_header += "\t# [ WARNING ]\n"
+    	sys.stderr.write(msg_header + "\t# " + msg +  "\n")
 
 
 def read_config(cfile):
@@ -100,7 +117,7 @@ def read_config(cfile):
     	"project_name", "output", "neo4j_memory","neo4j_address",
     	"biogrid_file","string_file","ppaxe_file",
     	"drivers_file","alias_file","web_address",
-    	"content_templates","logo_img", "databases"
+    	"content_templates","logo_img", "databases", "drivers_ext"
     ])
     opts = dict()
     try:
@@ -144,7 +161,7 @@ def print_opts(opts):
 	    "project_name","output", "neo4j_memory","neo4j_address",
 	    "biogrid_file","string_file","ppaxe_file",
 	    "drivers_file","alias_file","web_address",
-	    "content_templates","logo_img", "databases"
+	    "content_templates","logo_img", "databases", "drivers_ext"
     ]
     sys.stderr.write("    OPTIONS:\n")
     for opt in valid_options:
@@ -186,7 +203,8 @@ def check_files(filenames):
 
 def check_opts(opts):
     '''
-    Checks if config options are correct.
+    Checks if config options are correct. Changes necessary option 
+    values accordingly.
 
     Args:
         opts: config options dictionary.
@@ -214,10 +232,18 @@ def check_opts(opts):
     	msg = "Drivers file required!"
     	netengine_error(msg, fatal=True)
 
+    if 'drivers_ext' not in opts:
+        opts['drivers_ext'] = False
+    else:
+        if opts['drivers_ext'] != "True" and opts['drivers_ext'] != "False":
+            netengine_error("Configuration parameter drivers_ext has to be True or False", fatal=True)
+        else:
+            opts['drivers_ext'] = True if opts['drivers_ext'].lower() == 'true' else False
     filenames = [ opts[filename] for filename in opts.keys() if filename.find("_file") > 0 ]
     check_files(filenames)
 
 
+@job("Create directories")
 def create_dirs(opts):
     '''
     Creates all necessary directories into the output folder.
@@ -229,7 +255,7 @@ def create_dirs(opts):
         None
 
     '''
-    directories = ['plots', 'graphs', 'tables', 'django-project', 'logs', 'databases']
+    directories = ['plots', 'graphs', 'tables', 'django-project', 'logs', 'databases', 'neo4j']
     for direct in directories:
         try:
             os.mkdir(os.path.join(opts['output'], direct))
@@ -239,13 +265,14 @@ def create_dirs(opts):
 def print_job(name, done=False):
     if done is False:
         sys.stderr.write("\n# ---------------------------------------- #\n")
-        sys.stderr.write("# JOB NAME: %s\n" % name.upper())
+        sys.stderr.write("# JOB: %s\n" % name.upper())
         sys.stderr.write("# ---------------------------------------- #\n")
-        sys.stderr.write("    - Starting job: %s \n" % get_time())
+        sys.stderr.write("\n     - Starting job: %s \n" % get_time())
     else:
-        sys.stderr.write("    - Finished: %s \n\n" % get_time())
+        sys.stderr.write("\n     - Finished: %s \n\n" % get_time())
 
 
+@job("Build graph")
 def build_graph(opts):
     '''
     Creates graph files using filter_interactions_to_graph.pl
@@ -257,11 +284,12 @@ def build_graph(opts):
         None
 
     '''
-    job_name = "Build graph"
-    print_job(job_name)
     cmd = list()
     cmd.append(opts['bin'] + '/' + 'filter_interactions_to_graph.pl')
-    cmd.append('ids:%s' % opts['drivers_file'])
+    drivers_type = 'ids'
+    if opts['drivers_ext'] is True:
+        drivers_type = 'ext'
+    cmd.append('%s:%s' % (drivers_type, opts['drivers_file']) )
     cmd.append(opts['alias_file'])
     cmd.append(os.path.join(opts['output'], 'graphs/graphs'))
     graph_files = [ 
@@ -272,11 +300,12 @@ def build_graph(opts):
         subcmd = '%s:%s' % (name, opts[file]) 
         cmd.append(subcmd)
     call(cmd)
-    print_job(job_name, done=True)
 
-def graph_2_csv(opts):
+
+@job("Edges to csv")
+def edges_2_csv(opts):
     '''
-    Converts graph files to csv ready for uploading to neo4j.
+    Converts graph files to csv with edges ready for uploading to neo4j.
 
     Args:
         opts: config options dictionary.
@@ -285,6 +314,37 @@ def graph_2_csv(opts):
         None
 
     '''
+    cmd = list()
+    cmd.append(opts['bin'] + '/' + 'edge2neo4jcsv.pl')
+    cmd.append('-wholegraph')
+    cmd.append(os.path.join(opts['output'], 'graphs/graphs_wholegraph.dot'))
+    cmd.append('-alias')
+    cmd.append(os.path.join(opts['output'], 'graphs/graphs_IDalias.tbl'))
+    cmd.append('-json')
+    cmd.append(os.path.join(opts['output'], 'graphs/graphs_wholegraph.json'))
+    cmd.append('-maxlvl')
+    cmd.append('4')
+    cmd.append('-prefix')
+    cmd.append(os.path.join(opts['output'], 'graphs/graphs_graph_lvl+'))
+    cmd.append('-output')
+    cmd.append(os.path.join(opts['output'], 'neo4j/edges.csv'))
+
+    call(cmd)
+
+
+
+def nodes_2_csv(opts):
+    '''
+    Converts graph files to csv with nodes ready for uploading to neo4j.
+
+    Args:
+        opts: config options dictionary.
+
+    Returns:
+        None
+
+    '''
+
 
 def download_interactions(opts):
     '''
@@ -297,7 +357,6 @@ def download_interactions(opts):
         None
 
     '''
-
 
 
 def main():
@@ -313,6 +372,7 @@ def main():
     print_opts(opts)
     create_dirs(opts)
     build_graph(opts)
+    edges_2_csv(opts)
     # Prepare graphs to be uploaded to neo4j
 
     # Create plots and tables
