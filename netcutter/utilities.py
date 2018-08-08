@@ -13,6 +13,22 @@ from os.path import isfile
 from functools import wraps
 
 
+VALID_OPTIONS = set([
+        "project_name", "output", "neo4j_memory","neo4j_address",
+        "biogrid_file","string_file","ppaxe_file",
+        "drivers_file","alias_file","web_address",
+        "content_templates","logo_img", "download_databases", "drivers_ext",
+        "nvariants_file", "gene_ontology_file", "download_gene_ontology"
+    ])
+
+INCOMPATIBLE_OPTIONS = {
+    "biogrid_file": "download_databases",
+    "string_file": "download_databases",
+    "ppaxe_file": "download_databases",
+    "gene_ontology_file": "download_gene_ontology"
+}
+
+
 def get_time():
     '''
     Args:
@@ -110,13 +126,6 @@ def read_config(cfile):
     
     '''
 
-    valid_options = set([
-    	"project_name", "output", "neo4j_memory","neo4j_address",
-    	"biogrid_file","string_file","ppaxe_file",
-    	"drivers_file","alias_file","web_address",
-    	"content_templates","logo_img", "databases", "drivers_ext",
-        "nvariants_file"
-    ])
     opts = dict()
     try:
     	fh = open(cfile, "r")
@@ -132,7 +141,7 @@ def read_config(cfile):
         except ValueError:
             msg = "Invalid config parameter: %s" % line
             netengine_error(msg, fatal=True)
-    	if opt not in valid_options:
+    	if opt not in VALID_OPTIONS:
     		msg = "Invalid config parameter: %s" % opt
     		netengine_error(msg, fatal=True)
     		continue
@@ -155,15 +164,8 @@ def print_opts(opts):
         None
     
     '''
-    valid_options = [
-	    "project_name","output", "neo4j_memory","neo4j_address",
-	    "biogrid_file","string_file","ppaxe_file",
-	    "drivers_file","alias_file","web_address",
-	    "content_templates","logo_img", "databases", "drivers_ext",
-        "nvariants_file"
-    ]
     sys.stderr.write("    OPTIONS:\n")
-    for opt in valid_options:
+    for opt in sorted(list(VALID_OPTIONS)):
         if opt in opts:
     	   sys.stderr.write("    - %s : %s\n" % (opt, opts[opt]) )
 
@@ -198,6 +200,23 @@ def check_files(filenames):
         if not isfile(file) or not access(file, R_OK):
             msg = "Can't read file: %s" % file
             netengine_error(msg, fatal=True)
+
+
+
+def check_incompatible_opts(opts):
+    '''
+    Checks if the user provided incompatible options
+
+    Args:
+        opts: config options dictionary.
+
+    Returns:
+        None
+    '''
+    for dom_opt, nd_op in INCOMPATIBLE_OPTIONS.iteritems():
+        if dom_opt in opts and nd_op in opts:
+            netengine_error("Incompatible options '%s' and '%s' provided. Going to use '%s'." % (dom_opt, nd_op, dom_opt), fatal=False)
+            del opts[nd_op]
 
 
 def check_opts(opts):
@@ -239,5 +258,6 @@ def check_opts(opts):
         else:
             opts['drivers_ext'] = True if opts['drivers_ext'].lower() == 'true' else False
     filenames = [ opts[filename] for filename in opts.keys() if filename.find("_file") > 0 ]
+    check_incompatible_opts(opts)
     check_files(filenames)
 

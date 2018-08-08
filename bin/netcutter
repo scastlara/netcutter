@@ -19,8 +19,8 @@ def main():
     opts['base_dir'] = os.path.dirname(os.path.abspath(__file__))
     opts['bin'] = os.path.join(opts['base_dir'], 'bin')
     opts['data'] = os.path.join(opts['base_dir'], 'data')
-    utilities.check_opts(opts)
     utilities.print_opts(opts)
+    utilities.check_opts(opts)
 
     # JOBS
     #jobs.download_interactions(opts)
@@ -29,6 +29,7 @@ def main():
     jobs.edges_2_csv(opts)
     jobs.nodes_2_csv(opts)
     jobs.pull_neo4j_docker(opts)
+    jobs.start_neo4j_docker(opts)
 
     # Create plots and tables
 
