@@ -452,7 +452,7 @@ sub print_csv {
             print $fh ";", join(",", @{ $data->{$interaction}{$attribute}});
         }
       } else {
-        if (not $data->{$interaction}{$attribute}) {
+        if (not defined $data->{$interaction}{$attribute}) {
           print $fh ";NA";
         } else {
           print $fh ";$data->{$interaction}{$attribute}";

@@ -117,7 +117,8 @@ def read_config(cfile):
     	"project_name", "output", "neo4j_memory","neo4j_address",
     	"biogrid_file","string_file","ppaxe_file",
     	"drivers_file","alias_file","web_address",
-    	"content_templates","logo_img", "databases", "drivers_ext"
+    	"content_templates","logo_img", "databases", "drivers_ext",
+        "nvariants_file"
     ])
     opts = dict()
     try:
@@ -161,7 +162,8 @@ def print_opts(opts):
 	    "project_name","output", "neo4j_memory","neo4j_address",
 	    "biogrid_file","string_file","ppaxe_file",
 	    "drivers_file","alias_file","web_address",
-	    "content_templates","logo_img", "databases", "drivers_ext"
+	    "content_templates","logo_img", "databases", "drivers_ext",
+        "nvariants_file"
     ]
     sys.stderr.write("    OPTIONS:\n")
     for opt in valid_options:
@@ -315,19 +317,19 @@ def edges_2_csv(opts):
 
     '''
     cmd = list()
-    cmd.append(opts['bin'] + '/' + 'edge2neo4jcsv.pl')
+    cmd.append(os.path.join(opts['bin'], 'edge2neo4jcsv.pl'))
     cmd.append('-wholegraph')
-    cmd.append(os.path.join(opts['output'], 'graphs/graphs_wholegraph.dot'))
+    cmd.append(os.path.join(opts['output'], 'graphs', 'graphs_wholegraph.dot'))
     cmd.append('-alias')
-    cmd.append(os.path.join(opts['output'], 'graphs/graphs_IDalias.tbl'))
+    cmd.append(os.path.join(opts['output'], 'graphs', 'graphs_IDalias.tbl'))
     cmd.append('-json')
-    cmd.append(os.path.join(opts['output'], 'graphs/graphs_wholegraph.json'))
+    cmd.append(os.path.join(opts['output'], 'graphs', 'graphs_wholegraph.json'))
     cmd.append('-maxlvl')
     cmd.append('4')
     cmd.append('-prefix')
-    cmd.append(os.path.join(opts['output'], 'graphs/graphs_graph_lvl+'))
+    cmd.append(os.path.join(opts['output'], 'graphs', 'graphs_graph_lvl+'))
     cmd.append('-output')
-    cmd.append(os.path.join(opts['output'], 'neo4j/edges.csv'))
+    cmd.append(os.path.join(opts['output'], 'neo4j', 'edges.csv'))
 
     call(cmd)
 
@@ -344,6 +346,25 @@ def nodes_2_csv(opts):
         None
 
     '''
+    cmd = list()
+    cmd.append(os.path.join(opts['bin'], 'node2neo4jcsv.pl'))
+    cmd.append('-wholegraph')
+    cmd.append(os.path.join(opts['output'], 'graphs', 'graphs_wholegraph.dot'))
+    cmd.append('-alias')
+    cmd.append(os.path.join(opts['output'], 'graphs' ,'graphs_IDalias.tbl'))
+    if 'nvariants_file' in opts:
+        cmd.append("-nvariants")
+        cmd.append(opts['nvariants_file'])
+
+    cmd.append('-drivers')
+    cmd.append(opts['drivers_file'])
+    cmd.append('-maxlvl')
+    cmd.append('4')
+    cmd.append('-prefix')
+    cmd.append(os.path.join(opts['output'], 'graphs', 'graphs_graph_lvl+'))
+    cmd.append('-output')
+    cmd.append(os.path.join(opts['output'], 'neo4j', 'nodes.csv'))
+    call(cmd)
 
 
 def download_interactions(opts):
@@ -373,6 +394,7 @@ def main():
     create_dirs(opts)
     build_graph(opts)
     edges_2_csv(opts)
+    nodes_2_csv(opts)
     # Prepare graphs to be uploaded to neo4j
 
     # Create plots and tables
