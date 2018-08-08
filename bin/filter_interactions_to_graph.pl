@@ -44,7 +44,7 @@ use strict;
 use warnings;
 #
 BEGIN{
-    use global qw( :Benchmark :ExecReport :CommandLine :GetFH :Exit );
+    use CGL::Global qw( :Benchmark :ExecReport :CommandLine :GetFH :Exit );
     &init_timer(\@exectime);
 }
 # use Paths::Graph; ## Hangs on large graphs...
