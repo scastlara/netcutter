@@ -213,11 +213,14 @@ def check_incompatible_opts(opts):
     Returns:
         None
     '''
+    to_remove = list()
     for dom_opt, nd_op in INCOMPATIBLE_OPTIONS.iteritems():
         if dom_opt in opts and nd_op in opts:
             netengine_error("Incompatible options '%s' and '%s' provided. Going to use '%s'." % (dom_opt, nd_op, dom_opt), fatal=False)
-            del opts[nd_op]
+            to_remove.append(nd_op)
 
+    for opt in to_remove:
+        if opt in opts: del opts[opt]
 
 def check_opts(opts):
     '''
