@@ -1,8 +1,7 @@
 export DOCKER_OPTS="--dns 208.67.222.222 --dns 208.67.220.220"
 export THYIPADDR=0.0.0.0
-export THYNEO4J_AUTH='neo4j/neo4j'
-
-rm -v $NEOWD/data/dbms/{auth,auth.ini}
+export THYNEO4J_AUTH='neo4j/1234'
+rm -v $NEOWD/data/dbms/{auth,auth.ini} 2> /dev/null
 docker run \
        --detach \
        --publish=${THYIPADDR}:7474:7474 \
@@ -21,4 +20,4 @@ docker run \
        --volume=$NEOWD/logs:/var/lib/neo4j/logs:rw \
        --volume=$NEOWD/conf:/var/lib/neo4j/conf:rw \
        --volume=$NEOWD/import:/var/lib/neo4j/import:rw \
-       compgen/neo4j-netcutter;
+       netcutter-neo4j > /dev/null 2> /dev/null;

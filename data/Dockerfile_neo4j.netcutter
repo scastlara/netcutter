@@ -44,9 +44,9 @@ WORKDIR /var/lib/neo4j
 
 VOLUME /data
 
-COPY docker-entrypoint.RPGeNet.sh /docker-entrypoint.sh
+COPY docker-entrypoint.netcutter.sh /docker-entrypoint.sh
 
-EXPOSE 8474 8473 8687
+EXPOSE 7474 7473 7687
 
 ENTRYPOINT ["/sbin/tini", "-g", "--", "/docker-entrypoint.sh"]
 CMD ["neo4j"]

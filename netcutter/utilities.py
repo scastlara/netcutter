@@ -114,6 +114,20 @@ def netengine_error(msg, fatal=True):
     	sys.stderr.write(msg_header + "\t# " + msg +  "\n")
 
 
+def netengine_msg(msg):
+    '''
+    Prints messages to stderr
+
+    Args:
+        msg: String to print to stderr.
+
+    Returns:
+        None
+    '''
+    msg_header = "\t# [ MESSAGE ]\n"
+    sys.stderr.write("\n" + msg_header + "\t# " + msg +  "\n")
+
+
 def read_config(cfile):
     '''
     Reads configuration file.

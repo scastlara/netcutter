@@ -9,7 +9,7 @@ import re
 from functools import wraps
 from netcutter import utilities
 import pkg_resources
-
+import subprocess
 
 
 def job(job_name):
@@ -45,7 +45,7 @@ def create_dirs(opts):
                    os.path.join('neo4j', 'logs'), os.path.join('neo4j', 'conf')]
     for direct in directories:
         try:
-            os.mkdir(os.path.join(opts['output'], direct))
+            os.mkdir(os.path.join(opts['output'], direct), 0777)
         except OSError as err:
             utilities.netengine_error(str(err), fatal=False)
 
@@ -206,13 +206,11 @@ def start_neo4j_docker(opts):
     Returns:
         None
     '''
+    
+    neowd =  os.path.join(opts['output'], 'neo4j')
+    neowd = os.path.abspath(neowd)
+    subprocess.call("start_neo4j_docker.sh", shell=True, env=dict(os.environ, NEOWD=neowd), stdout=None, stderr=None)
+    utilities.netengine_msg("Neo4j database available at 0.0.0.0:7474")
 
-
-    cmd = list()
-    cmd.append('export')
-    cmd.append('NEOWD="%s"' % os.path.join(opts['output'], 'neo4j'))
-    # call(cmd)
-    print " ".join(cmd)
-    #subprocess.call("start_neo4j_docker.sh", shell=True)
 
 
