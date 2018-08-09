@@ -39,7 +39,10 @@ def create_dirs(opts):
         None
 
     '''
-    directories = ['plots', 'graphs', 'tables', 'django-project', 'logs', 'databases', 'neo4j']
+    directories = ['plots', 'graphs', 'tables', 
+                   'django-project', 'logs', 'databases', 
+                   'neo4j', os.path.join('neo4j', 'import'), os.path.join('neo4j', 'data'), 
+                   os.path.join('neo4j', 'logs'), os.path.join('neo4j', 'conf')]
     for direct in directories:
         try:
             os.mkdir(os.path.join(opts['output'], direct))
@@ -111,7 +114,7 @@ def edges_2_csv(opts):
     cmd.append('-prefix')
     cmd.append(os.path.join(opts['output'], 'graphs', 'graphs_graph_lvl+'))
     cmd.append('-output')
-    cmd.append(os.path.join(opts['output'], 'neo4j', 'edges.csv'))
+    cmd.append(os.path.join(opts['output'], 'neo4j', 'import', 'edges.csv'))
 
     call(cmd)
 
@@ -145,7 +148,7 @@ def nodes_2_csv(opts):
     cmd.append('-prefix')
     cmd.append(os.path.join(opts['output'], 'graphs', 'graphs_graph_lvl+'))
     cmd.append('-output')
-    cmd.append(os.path.join(opts['output'], 'neo4j', 'nodes.csv'))
+    cmd.append(os.path.join(opts['output'], 'neo4j', 'import', 'nodes.csv'))
     call(cmd)
 
 
@@ -203,6 +206,13 @@ def start_neo4j_docker(opts):
     Returns:
         None
     '''
+
+
     cmd = list()
+    cmd.append('export')
+    cmd.append('NEOWD="%s"' % os.path.join(opts['output'], 'neo4j'))
+    # call(cmd)
+    print " ".join(cmd)
+    #subprocess.call("start_neo4j_docker.sh", shell=True)
 
 
