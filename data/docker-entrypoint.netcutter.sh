@@ -99,9 +99,9 @@ fi
 : ${NEO4J_causal__clustering_raft__advertised__address:=${NEO4J_causalClustering_raftAdvertisedAddress:-"$(hostname):87000"}}
 
 : ${NEO4J_dbms_connectors_default__listen__address:="0.0.0.0"}
-: ${NEO4J_dbms_connector_http_listen__address:="0.0.0.0:8474"}
-: ${NEO4J_dbms_connector_https_listen__address:="0.0.0.0:8473"}
-: ${NEO4J_dbms_connector_bolt_listen__address:="0.0.0.0:8687"}
+: ${NEO4J_dbms_connector_http_listen__address:="0.0.0.0:7474"}
+: ${NEO4J_dbms_connector_https_listen__address:="0.0.0.0:7473"}
+: ${NEO4J_dbms_connector_bolt_listen__address:="0.0.0.0:7687"}
 : ${NEO4J_ha_host_coordination:="$(hostname):85001"}
 : ${NEO4J_ha_host_data:="$(hostname):86001"}
 
@@ -121,14 +121,14 @@ unset NEO4J_dbms_txLog_rotation_retentionPolicy NEO4J_UDC_SOURCE \
 
 # Custom settings for dockerized neo4j
 : ${NEO4J_dbms_tx__log_rotation_retention__policy:=100M size}
-: ${NEO4J_dbms_memory_pagecache_size:=8G}
+: ${NEO4J_dbms_memory_pagecache_size:=2G}
 : ${NEO4J_wrapper_java_additional:=-Dneo4j.ext.udc.source=docker}
-: ${NEO4J_dbms_memory_heap_initial__size:=12G}
-: ${NEO4J_dbms_memory_heap_max__size:=12G}
+: ${NEO4J_dbms_memory_heap_initial__size:=2G}
+: ${NEO4J_dbms_memory_heap_max__size:=2G}
 : ${NEO4J_dbms_connectors_default__listen__address:=0.0.0.0}
-: ${NEO4J_dbms_connector_http_listen__address:=0.0.0.0:8474}
-: ${NEO4J_dbms_connector_https_listen__address:=0.0.0.0:8473}
-: ${NEO4J_dbms_connector_bolt_listen__address:=0.0.0.0:8687}
+: ${NEO4J_dbms_connector_http_listen__address:=0.0.0.0:7474}
+: ${NEO4J_dbms_connector_https_listen__address:=0.0.0.0:7473}
+: ${NEO4J_dbms_connector_bolt_listen__address:=0.0.0.0:7687}
 : ${NEO4J_ha_host_coordination:=$(hostname):85001}
 : ${NEO4J_ha_host_data:=$(hostname):86001}
 : ${NEO4J_causal__clustering_discovery__listen__address:=0.0.0.0:85000}
