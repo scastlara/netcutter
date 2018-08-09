@@ -20,9 +20,13 @@ def job(job_name):
     def job_decorator(func):
         @wraps(func)
         def wrapped_function(*args, **kwargs):
-            print_job(job_name, done=False)
-            func(*args, **kwargs)
-            print_job(job_name, done=True)
+            try:
+                print_job(job_name, done=False)
+                func(*args, **kwargs)
+                print_job(job_name, done=True)
+            except Exception as err:
+                msg = "Job Error - %s: %s" % (job_name, err)
+                utilities.netengine_error(msg, fatal=True)
         return wrapped_function
     return job_decorator
 
@@ -209,7 +213,9 @@ def start_neo4j_docker(opts):
     
     neowd =  os.path.join(opts['output'], 'neo4j')
     neowd = os.path.abspath(neowd)
-    subprocess.call("start_neo4j_docker.sh", shell=True, env=dict(os.environ, NEOWD=neowd), stdout=None, stderr=None)
+    p = subprocess.call("start_neo4j_docker.sh", shell=True, env=dict(os.environ, NEOWD=neowd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if p != 0:
+        raise Exception("docker run command failed, error code %s" % p)
     utilities.netengine_msg("Neo4j database available at 0.0.0.0:7474")
 
 
