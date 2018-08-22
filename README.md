@@ -1,4 +1,7 @@
-# Netcutter
+<img width="350" src="https://rawgit.com/scastlara/netcutter/master/netcutter-icon.png"/>
+
+
+-----
 
 Disentangle protein-protein interactions networks by using a list of driver genes as baits, separating the network in different levels, each one of them more relevant to the drivers.
 
