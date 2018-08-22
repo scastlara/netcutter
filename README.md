@@ -1,4 +1,4 @@
-<img width="500" src="https://raw.githubusercontent.com/scastlara/netcutter/master/netcutter-icon.png?token=AHQSWMFVNUlghvfRS5eEHyOTUy3qT8KBks5bhnh2wA%3D%3D"/>
+<img width="400" src="https://raw.githubusercontent.com/scastlara/netcutter/master/netcutter-icon.png?token=AHQSWMFVNUlghvfRS5eEHyOTUy3qT8KBks5bhnh2wA%3D%3D"/>
 
 
 -----
