@@ -1,4 +1,4 @@
-<img width="350" src="https://rawgit.com/scastlara/netcutter/master/netcutter-icon.png"/>
+<img width="500" src="https://rawgit.com/scastlara/netcutter/master/netcutter-icon.png"/>
 
 
 -----
