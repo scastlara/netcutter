@@ -1,9 +1,12 @@
-# Netengine
+# Netcutter
 
+Disentangle protein-protein interactions networks by using a list of driver genes as baits, separating the network in different levels, each one of them more relevant to the drivers.
+
+Netcutter automatically creates a neo4j database with all the protein networks and serves a web application for users to explore the different levels by using docker.
 
 ## Configuration file
 
-`build.py` needs a netengine config file in order to compute the graphs and build the database/website. In this configuration file one has to set the necessary parameters and options for `build.py` to work. The syntax goes as follows:
+`netcutter` needs a netengine config file in order to compute the graphs and build the database/website. In this configuration file one has to set the necessary parameters and options for `build.py` to work. The syntax goes as follows:
 
 ```
 # Comment
