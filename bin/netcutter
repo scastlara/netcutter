@@ -10,6 +10,9 @@ from os import access, R_OK
 from os.path import isfile
 from functools import wraps
 from netcutter import utilities, jobs
+from py2neo import Graph
+import time
+
 
 def main():
     cmdopts = utilities.get_options()
@@ -29,7 +32,14 @@ def main():
     jobs.edges_2_csv(opts)
     jobs.nodes_2_csv(opts)
     jobs.pull_neo4j_docker(opts)
+    #jobs.download_go(opts)
+    opts['gene_ontology_file'] = os.path.join(opts['output'], 'GO', 'gene_ontologies.txt')
+    jobs.go_to_csv(opts)
     jobs.start_neo4j_docker(opts)
+    graph = utilities.connect_to_neo4j(opts)
+    jobs.upload_neo4j_genes(opts, graph)
+    jobs.upload_neo4j_interactions(opts, graph)
+    jobs.upload_neo4j_go(opts, graph)
 
     # Create plots and tables
 

@@ -11,6 +11,7 @@ import re
 from os import access, R_OK
 from os.path import isfile
 from functools import wraps
+from py2neo import Graph
 
 
 VALID_OPTIONS = set([
@@ -61,7 +62,7 @@ def print_start():
     '''
     msg = """
 # ---------------------------------------- #
-#       build.py: Building NetEngine       #
+#       build.py: Building netcutter       #
 # ---------------------------------------- #
     - Start: %s
 
@@ -80,10 +81,10 @@ def get_options():
         options dictionary
 
     '''
-    parser = argparse.ArgumentParser(description='Command-line tool to build a NetEngine network.')
+    parser = argparse.ArgumentParser(description='Command-line tool to build a netcutter network.')
     parser.add_argument(
         '-c','--config',
-        help='NetEngine configuration file.', required=True
+        help='netcutter configuration file.', required=True
     )
     try:
         options = parser.parse_args()
@@ -93,7 +94,7 @@ def get_options():
     return options
 
 
-def netengine_error(msg, fatal=True):
+def netcutter_error(msg, fatal=True):
     '''
     Deals with errors 
 
@@ -105,16 +106,16 @@ def netengine_error(msg, fatal=True):
         None
 
     '''
-    msg_header = "\n\n\t# NETENGINE ERROR\n"
+    msg_header = "\n\n     # netcutter ERROR\n"
     if fatal is True:
-    	msg_header += "\t# [ FATAL ]\n"
-    	sys.exit(msg_header + "\t# " + msg +  "\n")
+    	msg_header += "     # [ FATAL ]\n"
+    	sys.exit(msg_header + "     # " + msg +  "\n")
     else:
-    	msg_header += "\t# [ WARNING ]\n"
-    	sys.stderr.write(msg_header + "\t# " + msg +  "\n")
+    	msg_header += "     # [ WARNING ]\n"
+    	sys.stderr.write(msg_header + "     # " + msg +  "\n")
 
 
-def netengine_msg(msg):
+def netcutter_msg(msg):
     '''
     Prints messages to stderr
 
@@ -124,8 +125,8 @@ def netengine_msg(msg):
     Returns:
         None
     '''
-    msg_header = "\t# [ MESSAGE ]\n"
-    sys.stderr.write("\n" + msg_header + "\t# " + msg +  "\n")
+    msg_header = "     # [ MESSAGE ]\n"
+    sys.stderr.write("\n" + msg_header + "     # " + msg +  "\n")
 
 
 def read_config(cfile):
@@ -145,7 +146,7 @@ def read_config(cfile):
     	fh = open(cfile, "r")
     except Exception:
     	msg = "Config file not found. Can't read: %s" % cfile
-    	netengine_error(msg, fatal=True)
+    	netcutter_error(msg, fatal=True)
     for line in fh:
     	line = line.strip()
     	if line.startswith("#") or not line:
@@ -154,14 +155,14 @@ def read_config(cfile):
     	   opt, value = line.split("=")
         except ValueError:
             msg = "Invalid config parameter: %s" % line
-            netengine_error(msg, fatal=True)
+            netcutter_error(msg, fatal=True)
     	if opt not in VALID_OPTIONS:
     		msg = "Invalid config parameter: %s" % opt
-    		netengine_error(msg, fatal=True)
+    		netcutter_error(msg, fatal=True)
     		continue
     	if opt in opts:
     		msg = "Repeated option: %s! Ignoring it..." % opt
-    		netengine_error(msg, fatal=False)
+    		netcutter_error(msg, fatal=False)
     		continue
     	opts[opt] = value
     return opts
@@ -213,7 +214,7 @@ def check_files(filenames):
     for file in filenames:
         if not isfile(file) or not access(file, R_OK):
             msg = "Can't read file: %s" % file
-            netengine_error(msg, fatal=True)
+            netcutter_error(msg, fatal=True)
 
 
 
@@ -230,7 +231,7 @@ def check_incompatible_opts(opts):
     to_remove = list()
     for dom_opt, nd_op in INCOMPATIBLE_OPTIONS.iteritems():
         if dom_opt in opts and nd_op in opts:
-            netengine_error("Incompatible options '%s' and '%s' provided. Going to use '%s'." % (dom_opt, nd_op, dom_opt), fatal=False)
+            netcutter_error("Incompatible options '%s' and '%s' provided. Going to use '%s'." % (dom_opt, nd_op, dom_opt), fatal=False)
             to_remove.append(nd_op)
 
     for opt in to_remove:
@@ -261,20 +262,39 @@ def check_opts(opts):
     	and  'string_file' not in opts
     	and 'ppaxe_file' not in opts):
     	msg = "Biogrid, String or PPaxe file required!"
-    	netengine_error(msg, fatal=True)
+    	netcutter_error(msg, fatal=True)
 
     if 'drivers_file' not in opts:
     	msg = "Drivers file required!"
-    	netengine_error(msg, fatal=True)
+    	netcutter_error(msg, fatal=True)
 
     if 'drivers_ext' not in opts:
         opts['drivers_ext'] = False
     else:
         if opts['drivers_ext'] != "True" and opts['drivers_ext'] != "False":
-            netengine_error("Configuration parameter drivers_ext has to be True or False", fatal=True)
+            netcutter_error("Configuration parameter drivers_ext has to be True or False", fatal=True)
         else:
             opts['drivers_ext'] = True if opts['drivers_ext'].lower() == 'true' else False
     filenames = [ opts[filename] for filename in opts.keys() if filename.find("_file") > 0 ]
     check_incompatible_opts(opts)
     check_files(filenames)
+
+
+def connect_to_neo4j(opts):
+    '''
+    Connects to neo4j graph database
+
+    Args:
+        opts: config options dictionary.
+
+    Returns:
+        Neo4j Graph object
+    '''
+    try:
+        graph = Graph("http://127.0.0.1:7474/db/data/", password="1234")
+        return graph
+    except Exception as err:
+        netcutter_error("Can't connect to neo4j - %s" % err, fatal=True)
+
+
 

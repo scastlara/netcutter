@@ -429,9 +429,9 @@ sub print_csv {
 
   open (my $fh, ">$output")
     or die "Cannot open $output!\n";
-  print $fh "gene_1,gene_2,level,strength,genetic_interaction,".
-            "physical_interaction,unknown_interaction,biogrid,".
-            "biogrid_pubmedid,string,ppaxe,ppaxe_score,ppaxe_pubmedid\n";
+  print $fh "gene_1;gene_2;level;strength;genetic_interaction;".
+            "physical_interaction;unknown_interaction;biogrid;".
+            "biogrid_pubmedid;string;ppaxe;ppaxe_score;ppaxe_pubmedid\n";
   foreach my $interaction (keys %$data) {
     my ($gene1, $gene2) = split /->/, $interaction;
     # Skip interactions not present in biogrid OR string OR ppaxe
