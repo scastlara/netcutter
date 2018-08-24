@@ -173,20 +173,6 @@ def pull_neo4j_docker(opts):
     cmd = list()
 
 
-@job("Start neo4j docker")
-def start_neo4j_docker(opts):
-    '''
-    Starts neo4j docker 
-
-    Args:
-        opts: config options dictionary.
-
-    Returns:
-        None
-    '''
-    cmd = list()
-
-
 @job("Pull neo4j docker")
 def pull_neo4j_docker(opts):
     '''
@@ -304,7 +290,6 @@ def upload_neo4j_genes(opts, graph):
 
 
 
-
 @job("Upload gene interactions to neo4j")
 def upload_neo4j_interactions(opts, graph):
     '''
@@ -376,5 +361,81 @@ def upload_neo4j_go(opts, graph):
         MATCH (t:GO {accession: row.accession})
         CREATE (f)-[r:HAS_GO]->(t)
         SET r = row;
+    """
+    graph.run(cypher)
+
+
+@job("Shortest paths to skeleton")
+def shortest_paths_to_skeleton(opts):
+    '''
+    Computes shortest paths from all nodes in graph to skeleton.
+    Args:
+        opts: config options dictionary.
+
+    Returns:
+        None
+    '''
+    edges_csv = os.path.join(opts['output'], 'neo4j', 'import', 'edges.csv')
+    skeleton = utilities.read_skeleton(edges_csv)
+    graph, vprop = utilities.read_graph(edges_csv)
+    output = os.path.join(opts['output'], 'graphs', 'paths_2_skeleton.csv')
+    utilities.print_shortest_paths(graph, vprop, skeleton, output)
+
+
+@job("Shortest paths to csv")
+def unique_shortest_path(opts):
+    '''
+    Gets the shortest path from each gene to drivers and skeleton.
+    Args:
+        opts: config options dictionary.
+
+    Returns:
+        None
+    '''
+    drivers = utilities.read_drivers(opts['drivers_file'])
+    paths = utilities.get_paths(drivers, os.path.join(opts['output'], 'graphs', 'paths_2_skeleton.csv'))
+    utilities.print_unique_paths(opts, paths)
+
+
+@job("Upload shortest paths to neo4j")
+def upload_neo4j_shortestpaths(opts, graph):
+    '''
+    Uploads csv with shortest paths
+
+    Args:
+        opts: config options dictionary.
+        graph: Graph object of neo4j database.
+
+    Returns:
+        None
+    '''
+    cypher = """
+        LOAD CSV FROM "file:///var/lib/neo4j/import/has_path.csv" AS row
+        MATCH (s:GENE)
+        WHERE s.identifier = row[0]
+        WITH s, row
+        MATCH (t:GENE)
+        WHERE t.identifier = row[3]
+        CREATE (p:PATHWAY {to_level: toInteger(row[1]), length: toInteger(row[2]), target:row[3]})
+        CREATE (s)-[r:HAS_PATH]->(p)
+        CREATE (s)-[i:IS_IN_PATH {order: 0}]->(p);
+    """
+    graph.run(cypher)
+
+    cypher = """
+        LOAD CSV FROM "file:///var/lib/neo4j/import/is_in_path.csv" AS row
+        MATCH (g:GENE)-[has_path:HAS_PATH]->(p:PATHWAY)
+        WHERE g.identifier = row[0]
+        AND   p.target = row[1]
+        WITH p, row
+        MATCH (g:GENE)
+        WHERE g.identifier = row[2]
+        CREATE (g)-[is:IS_IN_PATH { order: row[3] }]->(p);
+    """
+    graph.run(cypher)
+
+    cypher = """
+        MATCH (n:GENE)-[r:IS_IN_PATH]->(p:PATHWAY)
+        SET r.order = toInteger(r.order);
     """
     graph.run(cypher)

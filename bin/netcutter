@@ -25,35 +25,39 @@ def main():
     utilities.print_opts(opts)
     utilities.check_opts(opts)
 
-    # JOBS
+    # PREPARATION AND DOWNLOADS
     #jobs.download_interactions(opts)
     jobs.create_dirs(opts)
+    
+    # GRAPH ANALYSIS
     jobs.build_graph(opts)
     jobs.edges_2_csv(opts)
     jobs.nodes_2_csv(opts)
-    jobs.pull_neo4j_docker(opts)
     #jobs.download_go(opts)
     opts['gene_ontology_file'] = os.path.join(opts['output'], 'GO', 'gene_ontologies.txt')
     jobs.go_to_csv(opts)
-    jobs.start_neo4j_docker(opts)
-    graph = utilities.connect_to_neo4j(opts)
-    jobs.upload_neo4j_genes(opts, graph)
-    jobs.upload_neo4j_interactions(opts, graph)
-    jobs.upload_neo4j_go(opts, graph)
+    jobs.shortest_paths_to_skeleton(opts)
+    jobs.unique_shortest_path(opts)
+
+    # NEO4j
+    jobs.pull_neo4j_docker(opts)
+    #jobs.start_neo4j_docker(opts)
+    #graph = utilities.connect_to_neo4j(opts)
+    #jobs.upload_neo4j_genes(opts, graph)
+    #jobs.upload_neo4j_interactions(opts, graph)
+    #jobs.upload_neo4j_go(opts, graph)
+    jobs.upload_neo4j_shortestpaths(opts, graph)
+
+    # Upload Gene Aliases to neo4j
+
+    # Create :schema
+
+    # Pull django docker
+
+    # Run django docker
 
     # Create plots and tables
 
-    # Start neo4j docker image
-
-    # Upload graphs to neo4j
-
-    # Create templates for django project
-
-    # Build django webpage
-
-    # Test django page??
-
-    # Set it up with uwgsi/docker
 
 
 

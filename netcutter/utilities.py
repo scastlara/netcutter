@@ -12,6 +12,8 @@ from os import access, R_OK
 from os.path import isfile
 from functools import wraps
 from py2neo import Graph
+import graph_tool.all as gt
+import numpy as numpy
 
 
 VALID_OPTIONS = set([
@@ -40,6 +42,7 @@ def get_time():
     '''    
     return datetime.datetime.now().strftime("%a, %d %B %Y %H:%M:%S")
 
+
 def get_time():
     '''
     Args:
@@ -49,6 +52,7 @@ def get_time():
         Returns time in a useful format
     '''    
     return datetime.datetime.now().strftime("%a, %d %B %Y %H:%M:%S")
+
 
 def print_start():
     '''
@@ -217,7 +221,6 @@ def check_files(filenames):
             netcutter_error(msg, fatal=True)
 
 
-
 def check_incompatible_opts(opts):
     '''
     Checks if the user provided incompatible options
@@ -236,6 +239,7 @@ def check_incompatible_opts(opts):
 
     for opt in to_remove:
         if opt in opts: del opts[opt]
+
 
 def check_opts(opts):
     '''
@@ -298,3 +302,202 @@ def connect_to_neo4j(opts):
 
 
 
+def read_skeleton(dfile):
+    '''
+    Reads driver genes from file.
+
+    Args:
+        dfile: graph file
+
+    Returns:
+        i_nodes: Names/symbols of nodes of interest
+    '''
+    fh = open(dfile, "r")
+    i_nodes = set()
+    next(fh)
+    for line in fh:
+        line = line.strip()
+        columns = line.split(";")
+        if int(columns[2]) != 0:
+            # Skip interactions not in skeleton
+            continue
+        i_nodes.add(columns[0])
+        i_nodes.add(columns[1])
+    return i_nodes
+
+
+def read_graph(filename):
+    '''
+    Reads graph converting it into graph_tool Graph
+
+    Args:
+        filename: csv graph file.
+
+    Returns:
+        graph: graph_tool Graph object.
+        vprop: property map containing symbols/names for genes in graph.
+    '''
+    fh        = open(filename, "r")
+    graph     = gt.Graph(directed=True)
+    vprop     = graph.new_vertex_property("string")
+    node_dict = dict()
+    node_idx  = 0
+    next(fh) # skip header
+    for line in fh:
+        line = line.strip()
+
+        elements = line.split(";")
+        s, t = str(), str()
+
+        if len(elements) == 1:
+            s = elements[0]
+        else:
+            s, t = elements[0], elements[1]
+
+        # Add vertices
+        if s and s not in node_dict:
+            source         = graph.add_vertex()
+            node_dict[s]   = source
+            vprop[source]  = s
+        if t and t not in node_dict:
+            target         = graph.add_vertex()
+            node_dict[t]   = target
+            vprop[target]  = t
+
+        # Add edge
+        if s and t:
+            graph.add_edge(node_dict[s], node_dict[t])
+    return graph, vprop
+
+
+def print_shortest_paths(graph, vprop, iprop, out):
+    '''
+    Prints shortest paths for a given 
+    Args:
+        graph: graph_tool graph.
+        vprop: property map with names/symbols.
+        iprop: names of skeleton genes.
+        out:   output filename.
+
+    Returns:
+        graph: graph_tool Graph object.
+        vprop: property map containing symbols/names for genes in graph.
+    '''
+    ofh = open(out, "w")
+    for v1 in graph.vertices():
+        for v2 in graph.vertices():
+            if vprop[v2] not in iprop:
+                continue
+            vlist, elist = gt.shortest_path(graph, v1, v2)
+            if vlist:
+                ofh.write("%s to %s," % (vprop[v1], vprop[v2]))
+                ofh.write(",".join([ vprop[vp] for vp in vlist ]))
+                ofh.write("\n")
+    ofh.close()
+
+
+def read_drivers(dfile):
+    '''
+    Reads driver genes
+
+    Args:
+        dfile: drivers genes file.
+
+    Returns:
+        drivers: set with drivers gene names/symbols.
+    '''
+    fh = open(dfile, "r")
+    drivers = set()
+    next(fh)
+    for line in fh:
+        line = line.strip()
+        columns = line.split(",")
+        drivers.add(columns[0])
+    return drivers
+
+
+def get_paths(drivers, pfile):
+    '''
+    reads pathways computed by graph_tool
+
+    Args:
+        drivers: set with drivers gene names/symbols.
+        pfile: file with pathways
+
+    Returns:
+        paths: dictionary of dictionary of arrays.
+               gene => ['drivers' | 'skeleton' ] => [gene1, gene2, ...]
+    '''
+    fh = open(pfile)
+    paths = dict()
+    for line in fh:
+        line = line.strip()
+        columns = line.split(",")
+        columns = columns[1:len(columns)]
+        gene = columns[0]
+        target = columns[-1]
+        plen = len(columns) - 1
+        pkey = "skeleton"
+        if gene in drivers:
+            continue
+        if target in drivers:
+            pkey = "drivers"
+        if gene not in paths:
+            # Initialize new gene
+            paths[gene] = dict()
+            paths[gene][pkey] = list()
+            paths[gene][pkey].append(columns)
+        else:
+            if pkey not in paths[gene]:
+                # Initialize path for gene
+                paths[gene][pkey] = list()
+                paths[gene][pkey].append(columns)
+            else:
+                # Check if current path is shorter than previous
+                if len(columns) < len(paths[gene][pkey][0]):
+                    # Remove all previous longer paths
+                    paths[gene][pkey] = list()
+                    paths[gene][pkey].append(columns)
+                elif len(columns) == len(paths[gene][pkey][0]):
+                    # Same length, add path to list
+                    paths[gene][pkey].append(columns)
+                else:
+                    # Longer path
+                    continue
+    return paths
+
+
+def print_unique_paths(opts, paths):
+    '''
+    Prints to out file unique shortest paths for each gene to drivers or skeleton.
+
+    Args:
+        paths: dictionary of dictionary of arrays.
+               gene => ['drivers' | 'skeleton' ] => [gene1, gene2, ...]
+        out: filename to output pathways
+
+    Returns:
+        None
+    '''
+    has_path_fh = open(os.path.join(opts['output'], 'neo4j', 'import', 'has_path.csv'), "w")
+    is_in_path_fh = open(os.path.join(opts['output'], 'neo4j', 'import', 'is_in_path.csv'), "w")
+    for gene, path_to in paths.iteritems():
+        if 'drivers' in path_to:
+            for path in path_to['drivers']:
+                length = len(path) - 1
+                has_path_fh.write( "%s,%s,%s,%s\n" % (gene, -1, str(length), path[-1]) )
+                i = 1
+                for node in path[1:]:
+                    is_in_path_fh.write( "%s,%s,%s,%s,%s\n" % ( gene, path[-1], node, str(i), str(-1)) )
+                    i += 1
+        if 'skeleton' in path_to:
+            for path in path_to['skeleton']:
+                length = len(path) - 1
+                ofh.write( "%s,%s,%s\n" % (gene, 0, str(length), ",".join(path)) )
+                i = 1
+                for node in path[1:]:
+                    is_in_path_fh.write( "%s,%s,%s,%s,%s\n" % ( gene, path[-1], node, str(i), str(0)) )
+                    i += 1
+    has_path_fh.close()
+    is_in_path_fh.close()
+    return
