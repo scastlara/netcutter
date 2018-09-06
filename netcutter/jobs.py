@@ -265,7 +265,7 @@ def start_neo4j_docker(opts):
     p = subprocess.call("start_neo4j_docker.sh", shell=True, env=dict(os.environ, NEOWD=neowd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if p != 0:
         raise Exception("docker run command failed, error code %s" % p)
-    time.sleep(15)
+    time.sleep(20)
     utilities.netcutter_msg("Neo4j database available at 0.0.0.0:7474")
 
 
@@ -285,6 +285,11 @@ def upload_neo4j_genes(opts, graph):
         CREATE (n:GENE)
         SET n = row
         REMOVE n.gene;
+    """
+    graph.run(cypher)
+    cypher = """
+        MATCH (n:GENE)
+        SET n.gene_disease = toInt(n.gene_disease)
     """
     graph.run(cypher)
 
@@ -439,3 +444,34 @@ def upload_neo4j_shortestpaths(opts, graph):
         SET r.order = toInteger(r.order);
     """
     graph.run(cypher)
+
+
+@job("Set up web application")
+def start_web_docker(opts):
+    '''
+    Starts docker with uwgsi + django
+
+    Args:
+        opts: config options dictionary.
+
+    Returns:
+        None
+    '''
+    cmd = list()
+    cmd.append("docker")
+    cmd.append("run")
+    cmd.append("-d")
+    cmd.append("--net=host")
+
+    if 'logo_img' in opts:
+        cmd.append("-v")
+        mount_str = opts['logo_img'] + ":" + "/netcutter-web/static/Images/logo.png"
+        cmd.append(mount_str)
+
+    if 'content_template' in opts:
+        cmd.append("-v")
+        mount_str = opts['content_template'] + ":" + "/netcutter-web/netcutterform/templates/netcutterform/index.html"
+        cmd.append(mount_str)
+
+    cmd.append("netcutter-web")
+    call(cmd)

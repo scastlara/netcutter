@@ -40,25 +40,25 @@ def main():
     jobs.unique_shortest_path(opts)
 
     # NEO4j
-    jobs.pull_neo4j_docker(opts)
-    #jobs.start_neo4j_docker(opts)
+    #jobs.pull_neo4j_docker(opts)
+    ##jobs.start_neo4j_docker(opts)
     #graph = utilities.connect_to_neo4j(opts)
     #jobs.upload_neo4j_genes(opts, graph)
     #jobs.upload_neo4j_interactions(opts, graph)
     #jobs.upload_neo4j_go(opts, graph)
-    jobs.upload_neo4j_shortestpaths(opts, graph)
-
+    #jobs.upload_neo4j_shortestpaths(opts, graph)
     # Upload Gene Aliases to neo4j
 
+    # DJANGO WEB APPLICATION
+    # Pull Docker with webapp
+    jobs.start_web_docker(opts)
+    # Run docker with webapp (mount templates folder!)
+        # Change docker so that it tries to overwrite the templates/logo
+    # Noice
+
+
     # Create :schema
-
-    # Pull django docker
-
-    # Run django docker
-
     # Create plots and tables
-
-
 
 
 if __name__ == "__main__":
