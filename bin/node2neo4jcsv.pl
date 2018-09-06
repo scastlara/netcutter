@@ -486,7 +486,11 @@ sub print_csv {
     print $fh "$gene";
     foreach my $attribute (qw( level inheritance_pattern gene_disease nvariants )) {
       if (not defined $data->{$gene}{$attribute}) {
-        print $fh ",NA";
+        if ($attribute eq "gene_disease") {
+          print $fh ",1";
+        } else {
+          print $fh ",NA";
+        }
       } else {
         print $fh ",$data->{$gene}{$attribute}";
       }

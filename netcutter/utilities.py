@@ -20,7 +20,7 @@ VALID_OPTIONS = set([
         "project_name", "output", "neo4j_memory","neo4j_address",
         "biogrid_file","string_file","ppaxe_file",
         "drivers_file","alias_file","web_address",
-        "content_templates","logo_img", "download_databases", "drivers_ext",
+        "content_template","logo_img", "download_databases", "drivers_ext",
         "nvariants_file", "gene_ontology_file", "download_gene_ontology"
     ])
 
