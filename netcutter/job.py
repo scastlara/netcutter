@@ -5,9 +5,12 @@ import datetime
 
 class Job(object):
     """
+
+    Example:
+
 from netcutter.netcutter_options import NetcutterOptions
-op = NetcutterOptions.from_config_file("netengine.conf")
 from netcutter.netcutter_pipeline import *
+op = NetcutterOptions.from_config_file("netengine.conf")
 pipe = NetcutterPipeline(op)
 pipe.run()
     """
@@ -20,11 +23,18 @@ pipe.run()
         self.error_message = None
         self.start_time = None
         self.end_time = None
-        self.elapsed_time = None
     
     @property
     def name(self):
         return str(self.__class__.__name__)
+
+    @property
+    def elapsed_time(self):
+        if self.has_finished():
+            duration = self.start_time - self.end_time
+            return str(duration)
+        else:
+            return "-"
 
     def run(self):
         try:
@@ -35,7 +45,6 @@ pipe.run()
             self._define_error(err)
         finally:
             self.end_time = datetime.datetime.now()
-            self.elapsed_time = self.end_time - self.start_time
             self.log()
             self.exit_if_error()
     
@@ -78,5 +87,14 @@ pipe.run()
             Status: {1}
             Start time: {2}
             End time: {3}
-            Error: {4}
-            """.format(self.name, self.status, self.start_time, self.end_time, self.format_error_message()))
+            Elapsed time: {4}
+            Error: {5}
+            """.format(
+                self.name, 
+                self.status.name, 
+                self.start_time, 
+                self.end_time, 
+                self.elapsed_time,
+                self.format_error_message()
+            )
+        )

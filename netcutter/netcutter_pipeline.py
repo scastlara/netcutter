@@ -10,20 +10,6 @@ class NetcutterPipeline(object):
         self.options = options
         self._job_name_mappings = None
     
-    def run(self):
-        for job_class in self.jobs_to_run():
-            job = job_class(self.options)
-            job.run()
-    
-    def jobs_to_run(self):
-        if self.logfile_exists():
-            return self._read_jobs_to_run()
-        else:
-            return NetcutterPipeline._job_list
-    
-    def logfile_exists(self):
-        return os.path.isfile(self.options.logfile)
-    
     @property
     def job_name_mappings(self):
         if not self._job_name_mappings:
@@ -32,11 +18,28 @@ class NetcutterPipeline(object):
                 self._job_name_mappings[job.__name__] = job
         return self._job_name_mappings
 
+    def run(self):
+        for job_class in self.jobs_to_run():
+            job = job_class(self.options)
+            job.run()
+    
+    def jobs_to_run(self):
+        if self.logfile_exists():
+            if self.options.stop_after is not None:
+                self._remove_jobs_after_stop(self.options.stop_after)
+            return self._read_jobs_to_run()
+        else:
+            return NetcutterPipeline._job_list
+    
+    def logfile_exists(self):
+        return os.path.isfile(self.options.logfile)
+    
     def _read_jobs_to_run(self):
         log_filehandle = self.options.get_log_filehandle()
         done_job_names = self._read_done_jobs(log_filehandle)
         log_filehandle.close()
-        return self._get_jobs_from_names(done_job_names, reverse=True)
+        not_done_jobs = self._get_not_done_jobs(done_job_names)
+        return not_done_jobs
 
     def _read_done_jobs(self, log_filehandle):
         current_job = ""
@@ -54,15 +57,27 @@ class NetcutterPipeline(object):
                 continue
         return done_job_names
 
+    def _get_done_jobs(self, done_job_names):
+        return self._get_jobs_from_names(done_job_names)
+
+    def _get_not_done_jobs(self, done_job_names):
+        return self._get_jobs_from_names(done_job_names, reverse=True)
+    
     def _get_jobs_from_names(self, job_names, reverse=False):
         jobs = []
-        all_job_names = self.job_name_mappings.keys()
+        all_job_names = [ job.__name__ for job in self._job_list ]
         for job_name in all_job_names:
             if reverse:
-                if job_name in job_names:
-                    continue
-            else:
                 if job_name not in job_names:
-                    continue
-            jobs.append(self.job_name_mappings[job_name])
+                    jobs.append(self.job_name_mappings[job_name])
+            else:
+                if job_name in job_names:
+                    jobs.append(self.job_name_mappings[job_name])
         return jobs
+
+    def _remove_jobs_after_stop(self, stop_job):
+        try:
+            stop_job_index = NetcutterPipeline._job_list.index(stop_job)
+            NetcutterPipeline._job_list = NetcutterPipeline._job_list[:stop_job_index + 1]
+        except ValueError:
+            pass        

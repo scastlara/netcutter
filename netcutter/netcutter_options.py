@@ -41,12 +41,12 @@ class NetcutterOptions(object):
         with open(filename, "r") as fh:
             for line in fh:
                 line = line.strip()
-                if line.startswith("#"):
+                if line.startswith("#") or not line:
                     continue
                 try:
                     option, value = line.split("=")
                     opts[option] = value
                 except ValueError:
-                    sys.stderr.write("Invalid config parameter, line: {}".format(line))
+                    sys.stderr.write("Invalid config parameter, line: {}\n".format(line))
         return opts
 
