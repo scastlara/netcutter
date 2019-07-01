@@ -6,6 +6,7 @@ class NetcutterOptions(object):
         "logfile" : "netcutter.log",
         "project_name" : None, 
         "output" : None, 
+        "stop_after": None,
         "neo4j_memory" : None,
         "neo4j_address" : None,
         "biogrid_file" : None,
