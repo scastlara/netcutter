@@ -23,6 +23,7 @@ pipe.run()
         self.error_message = None
         self.start_time = None
         self.end_time = None
+        self.tags = []
     
     @property
     def name(self):

@@ -25,6 +25,8 @@ def test_netcutter_options_parameters():
             "logfile",
             "project_name",
             "output",
+            "stop_at",
+            "start_at",
             "neo4j_memory",
             "neo4j_address",
             "biogrid_file",
@@ -51,15 +53,15 @@ def test_read_conf(options):
 
 def test_get_done_jobs(options):
     pipeline = NetcutterPipeline(options)
-    job_name = "JobCreateDirectories"
-    jobs = pipeline._get_done_jobs([job_name])
+    job_name = "CreateDirectories"
+    jobs = pipeline.job_scheduler._get_done_jobs([job_name])
     assert(jobs[0].__name__ == job_name)
 
 def test_get_not_done_jobs(options):
     pipeline = NetcutterPipeline(options)
-    job_name = "JobCreateDirectories"
-    all_job_names = set([ job.__name__ for job in pipeline._job_list ])
-    not_done_jobs = pipeline._get_not_done_jobs([job_name])
+    job_name = "CreateDirectories"
+    all_job_names = set([ job.__name__ for job in pipeline.job_list ])
+    not_done_jobs = pipeline.job_scheduler._get_not_done_jobs([job_name])
     not_done_jobs = set([ job.__name__ for job in not_done_jobs ])
     
     assert(job_name not in not_done_jobs) # job_name is done, so it should not be in not_done_jobs

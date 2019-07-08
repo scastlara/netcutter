@@ -5,8 +5,9 @@ class NetcutterOptions(object):
     _defaults = {
         "logfile" : "netcutter.log",
         "project_name" : None, 
-        "output" : None, 
-        "stop_after": None,
+        "output" : None,
+        "start_at": None,
+        "stop_at": None,
         "neo4j_memory" : None,
         "neo4j_address" : None,
         "biogrid_file" : None,
@@ -27,9 +28,40 @@ class NetcutterOptions(object):
     def __init__(self, **kwargs):
         self.__dict__.update(self._defaults)
         self.__dict__.update(kwargs)
+        self._check_options()
 
     def get_log_filehandle(self, mode="r"):
         return open(self.logfile, mode)
+
+    def _check_options(self):
+        """
+        Checks if options are set correctly.
+
+        Raises:
+            ValueError: If option has a non-valid value.
+            KeyError: If option name is not valid.
+        """
+        self._check_required_options()
+        self._check_incompatible_options()
+        self._check_non_valid_options()
+    
+    def _check_required_options(self):
+        """
+        Checks if any of the required options is None.
+        """
+        pass
+    
+    def _check_incompatible_options(self):
+        """
+        Checks if two (or more) incompatible are set at the same time.
+        """
+        pass
+    
+    def _check_non_valid_options(self):
+        """
+        Checks if a non-valid option is set.
+        """
+        pass
 
     @classmethod
     def from_config_file(cls, filename):
