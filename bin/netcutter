@@ -1,2 +1,9 @@
 #!/usr/bin/python3
-print("Hello world")
+import sys
+from netcutter import *
+
+def main():
+    config_file = sys.argv[1]
+    options = NetcutterOptions.from_config_file(config_file)
+    pipeline = NetcutterPipeline(options)
+    pipeline.run()
