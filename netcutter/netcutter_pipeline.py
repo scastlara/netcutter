@@ -1,4 +1,5 @@
 from .job_scheduler import *
+import sys
 
 class NetcutterPipeline(object):
 
@@ -16,43 +17,49 @@ class NetcutterPipeline(object):
             job.run()
     
     def jobs_to_run(self):
-        self.handle_tags()
-        self.handle_start_at()
-        self.handle_stop_at()
-        self.handle_done_jobs()
+        self._handle_tags()
+        self._handle_start_at()
+        self._handle_stop_at()
+        self._handle_done_jobs()
         
-        self.exit_if_no_jobs()
+        self._exit_if_no_jobs()
         return self.job_list
     
-    def log(self, message, exit_flag=False):
+    def log(self, message, exception=None):
         header = "Warning"
-        if exit_flag:
+        if exception is not None:
             header = "Error"
         log_filehandle = self.options.get_log_filehandle(mode="w")
         log_filehandle.write("{}: {}\n".format(header, message))
         log_filehandle.close()
-        if exit_flag:
-            sys.exit(1)
+        if exception is not None:
+            raise exception(message)
 
     def logfile_exists(self):
         return os.path.isfile(self.options.logfile)
 
-    def handle_tags(self):
+    def _handle_tags(self):
         if self.options.tags is not None:
             self.job_scheduler.keep_jobs_with_tags(self.options.tags)
 
-    def handle_start_at(self):
+    def _handle_start_at(self):
         if self.options.start_at is not None:
-            self.job_scheduler.remove_jobs_before_start(self.options.start_at)
+            try:
+                self.job_scheduler.remove_jobs_before_start(self.options.start_at)
+            except ValueError:
+                self.log("Invalid option for 'start_at': {}".format(self.options.start_at), ValueError)
 
-    def handle_stop_at(self):
+    def _handle_stop_at(self):
         if self.options.stop_at is not None:
-            self.job_scheduler.remove_jobs_after_stop(self.options.stop_at)
+            try:
+                self.job_scheduler.remove_jobs_after_stop(self.options.stop_at)
+            except ValueError:
+                self.log("Invalid option for 'stop_at': {}".format(self.options.stop_at), ValueError)
 
-    def handle_done_jobs(self):
+    def _handle_done_jobs(self):
         if self.logfile_exists():
             self.job_scheduler.read_jobs_to_run(self.options)
 
-    def exit_if_no_jobs(self):
+    def _exit_if_no_jobs(self):
         if not self.job_list:
-            self.log("No jobs to run.", exit_flag=True)
+            self.log("No jobs to run.", exception=IndexError)

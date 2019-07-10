@@ -13,8 +13,8 @@ class JobScheduler(object):
         self.job_list = [
             CreateDirectories,
             BuildGraph,
-            #EdgesToCsv,
-            #NodesToCsv,
+            EdgesToCsv,
+            NodesToCsv,
         ]
         self._job_name_mappings = {}
     
@@ -27,20 +27,14 @@ class JobScheduler(object):
 
     def remove_jobs_before_start(self, start_job):
         job_names = [ job.__name__ for job in self.job_list ]
-        try:
-            start_job_index = job_names.index(start_job)
-            self.job_list = self.job_list[start_job_index:]
-        except ValueError:
-            pass
+        start_job_index = job_names.index(start_job)
+        self.job_list = self.job_list[start_job_index:]
         return self.job_list
 
     def remove_jobs_after_stop(self, stop_job):
         job_names = [ job.__name__ for job in self.job_list ]
-        try:
-            stop_job_index = job_names.index(stop_job)
-            self.job_list = self.job_list[:stop_job_index + 1]
-        except ValueError:
-            pass
+        stop_job_index = job_names.index(stop_job)
+        self.job_list = self.job_list[:stop_job_index + 1]
         return self.job_list
 
     def read_jobs_to_run(self, options):
@@ -51,7 +45,7 @@ class JobScheduler(object):
         self.job_list = not_done_jobs
     
     def keep_jobs_with_tags(self, tags):
-        self.job_list = [ job for job in self.job_list if job.tags in tags ]
+        self.job_list = [ job for job in self.job_list if tags.intersection(job.tags) ]
 
     def _read_done_jobs(self, log_filehandle):
         current_job = ""
