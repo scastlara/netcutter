@@ -21,9 +21,10 @@ class CreateDirectories(Job):
         os.path.join('neo4j', 'conf')
     ]
 
+    tags = set(["build"])
+    
     def __init__(self, options):
         super(CreateDirectories, self).__init__(options)
-        self.tags = ["build"]
 
     def _run(self):
         for directory in CreateDirectories._directories:
@@ -38,9 +39,10 @@ class BuildGraph(Job):
     """
     """
 
+    tags = set(["build"])
+
     def __init__(self, options):
         super(BuildGraph, self).__init__(options)
-        self.tags = ["build"]
 
     def _run(self):
         call(self._prepare_command())
@@ -64,5 +66,34 @@ class BuildGraph(Job):
             subcmd = "{}:{}".format(name, self.options.getattr(file_name))
             cmd.append(subcmd)
         return cmd
+
+
+class EdgesToCsv(Job):
+
+    tags = set(["neo4j"])
+    
+    def __init__(self, options):
+        super(EdgesToCsv, self).__init__(options)
+
+    def _run(self):
+        call(self._prepare_command())
+    
+    def _prepare_command(self):
+        pass
+
+
+class NodesToCsv(Job):
+
+    tags = set(["neo4j"])
+
+    def __init__(self, options):
+        super(NodesToCsv, self).__init__(options)
+
+    def _run(self):
+        call(self._prepare_command())
+    
+    def _prepare_command(self):
+        pass
+
 
 # Add new jobs here.

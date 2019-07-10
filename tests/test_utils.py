@@ -25,6 +25,7 @@ def test_netcutter_options_parameters():
             "logfile",
             "project_name",
             "output",
+            "tags",
             "stop_at",
             "start_at",
             "neo4j_memory",

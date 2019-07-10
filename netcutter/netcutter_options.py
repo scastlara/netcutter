@@ -5,6 +5,7 @@ class NetcutterOptions(object):
     _defaults = {
         "logfile" : "netcutter.log",
         "project_name" : None, 
+        "tags": None, 
         "output" : None,
         "start_at": None,
         "stop_at": None,
@@ -44,6 +45,7 @@ class NetcutterOptions(object):
         self._check_required_options()
         self._check_incompatible_options()
         self._check_non_valid_options()
+        self._convert_set_options()
     
     def _check_required_options(self):
         """
@@ -51,6 +53,17 @@ class NetcutterOptions(object):
         """
         pass
     
+    def _convert_set_options(self):
+        """
+        Converts multiple-valued options into a set
+        """
+        multiple_options = ["tags"]
+        for option in multiple_options:
+            value = getattr(self, option)
+            if value:
+                value = set(value.split(","))
+                setattr(self, option, value)
+
     def _check_incompatible_options(self):
         """
         Checks if two (or more) incompatible are set at the same time.
