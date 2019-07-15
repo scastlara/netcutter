@@ -1,3 +1,6 @@
+[![Build Status](https://api.travis-ci.org/scastlara/netcutter.svg?branch=master)](https://travis-ci.org/scastlara/netcutter) 
+[![Coverage Status](https://coveralls.io/repos/github/scastlara/netcutter/badge.svg?branch=master)](https://coveralls.io/github/scastlara/netcutter?branch=master) 
+
 <img width="400" src="netcutter-icon.png"/>
 
 
