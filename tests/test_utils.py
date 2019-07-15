@@ -1,6 +1,7 @@
 from netcutter import *
 import os
 import pytest
+import datetime
 
 @pytest.fixture
 def rootdir():
@@ -52,6 +53,29 @@ def test_netcutter_options_parameters():
 
 def test_read_conf(options):
     assert(options.project_name == "PROJECT_NAME_HERE")
+
+def test_job_creation(options):
+    job = Job(options)
+    assert(type(job) == Job)
+
+def test_job_name(options):
+    general_job = Job(options)
+    example_job = CreateDirectories(options)
+    assert(general_job.name == "Job")
+    assert(example_job.name == "CreateDirectories")
+
+def test_job_elapsed(options):
+    job = Job(options)
+    job.start_time = datetime.datetime(2019, 1, 1, 12, 30)
+    job.end_time = datetime.datetime(2019, 1, 1, 13, 45)
+    job.status = job._status.done
+    assert(job.elapsed_time == "1:15:00")
+
+def test_job_elapsed_not_done(options):
+    job = Job(options)
+    job.start_time = datetime.datetime(2019, 1, 1, 12, 30)
+    job.end_time = datetime.datetime(2019, 1, 1, 13, 45)
+    assert(job.elapsed_time == "-")
 
 def test_get_done_jobs(options):
     pipeline = NetcutterPipeline(options)

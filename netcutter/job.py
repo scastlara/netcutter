@@ -32,7 +32,7 @@ pipe.run()
     @property
     def elapsed_time(self):
         if self.has_finished():
-            duration = self.start_time - self.end_time
+            duration = self.end_time - self.start_time
             return str(duration)
         else:
             return "-"
