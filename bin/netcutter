@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 import sys
-from netcutter import *
+from netcutter import NetcutterOptions, NetcutterPipeline
 
 def main():
     config_file = sys.argv[1]

@@ -12,6 +12,7 @@ def options():
     conf_file = os.path.join(rootdir, 'test_files/netcutter.conf')
     return NetcutterOptions.from_config_file(conf_file)
 
+
 def test_netcutter_options_creation():
     try:
         options = NetcutterOptions()
