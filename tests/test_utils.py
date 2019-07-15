@@ -77,6 +77,21 @@ def test_job_elapsed_not_done(options):
     job.end_time = datetime.datetime(2019, 1, 1, 13, 45)
     assert(job.elapsed_time == "-")
 
+def test_job_abstract_run(options):
+    job = Job(options)
+    try:
+        job._run()
+        assert(1 == 2)
+    except NotImplementedError:
+        assert(1 == 1)
+
+def test_job_define_error(options):
+    job = Job(options)
+    msg = "The message"
+    job._define_error(msg)
+    assert(job.has_error())
+    assert(job.error_message == msg)
+    
 def test_get_done_jobs(options):
     pipeline = NetcutterPipeline(options)
     job_name = "CreateDirectories"
